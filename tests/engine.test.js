@@ -709,6 +709,22 @@ ok('迁移：旧存档里的投递记录一个不丢（加新键不能伤老数�
   return s.applications.length === 1;
 })());
 
+/* ============ 第三十五轮：解析根因修复（本套件可直接调 parseResume） ============ */
+const issn35 = parseResume('教育背景\\n贵州医科大学 口腔医学 本科 2020.09 - 2025.07\\n《论文》发表于《饮食保健》2021 年第 25 期（ISSN 2095-8439）');
+ok('ISSN 2095-8439 不再污染毕业年份（年份区间 + 月份后缘检查）',
+  issn35.profile.gradYear === '2025-07', JSON.stringify(issn35.profile.gradYear));
+const deco35 = parseResume('杨明翰 | 求职意向：产品运营\\n电话：13800000000\\n教育背景\\n香港城市大学 健康科学与管理 硕士 2025.09 - 2026.10');
+ok('装饰首行「杨明翰 | 求职意向…」认出姓名并标「待确认」',
+  deco35.profile.name === '杨明翰' && deco35.meta.name === 'guess', deco35.profile.name + '/' + deco35.meta.name);
+const org35 = parseResume('某某大学招生简章 | 2026 版\\n教育背景\\n某大学 本科 2022.09 - 2026.06');
+ok('机构名不冒充人名（「某某大学招生简章」不识别成姓名）', !org35.profile.name && org35.meta.name === 'miss');
+const pct35 = parseResume('姓名：张三\\n教育背景\\n某大学 软件工程 本科 2022.09 - 2026.06 GPA 85/100');
+ok('百分制 85：gpaRaw 纯数值 + gpaScale=100 + 折算 ≈ 3.7',
+  pct35.profile.gpaRaw === '85' && pct35.profile.gpaScale === 100 && pct35.profile.gpa === 3.7,
+  JSON.stringify([pct35.profile.gpaRaw, pct35.profile.gpaScale, pct35.profile.gpa]));
+ok('filters 默认值带上 jobQ 与 prefOpen（老存档由 mergeState 兜底补齐）',
+  (function () { const df = defaultFilters(); return df.jobQ === '' && !!df.prefOpen && df.prefOpen.city === false; })());
+
 out.push('');
 out.push('=== 结果 ===');
 out.push(pass + ' 项通过' + (fail ? '，' + fail + ' 项失败' : '，全部通过' ));
@@ -1461,6 +1477,16 @@ ok3('第二十八轮：PS 取材偏科研、CV 取材偏可量化成果',
     typeof sandbox.copyTextSafe === 'function' && typeof sandbox.clipboardWrite === 'function' &&
     typeof sandbox.showTextFallback === 'function');
   ok3('四个导出入口都改走统一提示词弹窗（>= 3 处调用）', js.split('openAiPrompt(').length - 1 >= 4);
+
+  /* ============ 第三十五轮：UI 层源码断言（js 在本套件可用） ============ */
+  ok3('extractPdf 已按行重组（旧实现把整页拼成一行）',
+    js.indexOf('pageLines.join') >= 0 && js.indexOf("tc.items.map(it => it.str).join(' ')") < 0);
+  ok3('求职偏好区：说明改为「岗位按照匹配度降序检索」，旧的「一个都不选」句式下线',
+    js.indexOf('岗位按照匹配度降序检索') >= 0 && js.indexOf('在全部岗位内按匹配度降序检索') < 0);
+  ok3('偏好分组折叠 + 姓名姓氏表 + 分制选择器 三件新组件都在',
+    js.indexOf('function catFoldHtml') >= 0 && js.indexOf('COMMON_SURNAMES') >= 0 && js.indexOf('data-ksel="gpaScale"') >= 0);
+  ok3('paintField 用 closest(.field)（GPA 字段内嵌 flex 行后 parentNode 会刷错容器）',
+    js.indexOf("el.closest('.field')") >= 0);
 }
 
 out2.push('=== 附加结果 ===' + (pass2 ? '（' + pass2 + ' 项全绿）' : ''));

@@ -1546,11 +1546,123 @@ module.exports = function (ctx) {
     if (!q('#saveBadge')) throw new Error('缺「已自动保存」标识');
     if (!q('#restoreStrip')) throw new Error('缺「已恢复上次的资料」提示条');
     win.switchView('study');
-    const nav = qa('#studyNav .pn-i');
-    if (nav.length < 5) throw new Error('申学视图缺锚点子导航（实际 ' + nav.length + ' 个）');
+    const nav = qa('#studyNav .pn-c');
+    if (nav.length < 5) throw new Error('申学视图缺功能模块卡（实际 ' + nav.length + ' 个）');
+    if (!nav[0].querySelector('.pn-d') || !nav[0].querySelector('.pn-d').textContent) {
+      throw new Error('模块卡缺一句「这里面是什么」的描述');
+    }
     click(nav[0]);
-    if (!nav[0].classList.contains('on')) throw new Error('锚点点击后没有高亮');
-    log('引导条 4 步 + 申学 6 锚点（点击高亮）+ 自动保存标识齐全');
+    if (!nav[0].classList.contains('on')) throw new Error('模块卡点击后没有高亮');
+    log('引导条 4 步 + 申学 ' + nav.length + ' 张功能模块卡（含描述、点击高亮）+ 自动保存标识齐全');
+  });
+
+  /* ============ 第三十五轮：8 项体验修复 ============ */
+  step('35 轮：求职偏好区改名去误导 + 分组折叠默认收起', function () {
+    win.switchView('job');
+    const head = q('#jobPrefCard .card-h').textContent;
+    if (head.indexOf('岗位按照匹配度降序检索') < 0) throw new Error('说明文案没改：' + head.slice(0, 60));
+    if (head.indexOf('一个都不选') >= 0) throw new Error('旧句式还在');
+    if (qa('#jobPrefCard .cat-fold').length !== 3) throw new Error('应为 3 个折叠组');
+    if (qa('#jobPrefCard .cat-fold-b:not([hidden])').length) throw new Error('默认应全部收起');
+    const labels = qa('#jobPrefCard .cat-fold-t').map(function (x) { return x.textContent; }).join('/');
+    if (labels.indexOf('期望城市') >= 0 || labels.indexOf('行业倾向') >= 0) throw new Error('误导性旧名还在：' + labels);
+    if (!q('#importJobsBtn').className.indexOf('primary')) throw new Error('导入按钮应升级为主按钮');
+  });
+
+  step('35 轮：折叠可展开/收起，状态存进 filters.prefOpen', function () {
+    const h = q('#jobPrefCard [data-fold-t="city"]');
+    click(h);
+    if (q('#cityBlk').hidden) throw new Error('点击后未展开');
+    const st35 = JSON.parse(win.localStorage.getItem('zhiyin_state_v1'));
+    if (!st35.filters.prefOpen || st35.filters.prefOpen.city !== true) throw new Error('展开状态未持久化');
+    if (qa('#cityBlk .chip').length < 15) throw new Error('展开后选项不足');
+    click(h);
+    if (!q('#cityBlk').hidden) throw new Error('再次点击未收起');
+  });
+
+  step('35 轮：关键词搜索即输即筛，焦点不丢，清空恢复', function () {
+    /* 列表有分页（每页至多 10 条），按条数断言不稳 —— 用页头「共 N 个岗位」的总数 */
+    const total = () => {
+      const m = q('#jobList .card-h').textContent.match(/共 (\d+) 个岗位/);
+      if (!m) throw new Error('页头缺「共 N 个岗位」');
+      return +m[1];
+    };
+    const before = total();
+    if (before <= 0) throw new Error('岗位总数异常：' + before);
+    const jq = q('#jobQ');
+    if (!jq) throw new Error('缺搜索框');
+    /* 用必然无命中的乱词验证「筛得到空」，不依赖前面步骤留下的偏好状态 */
+    input(jq, '绝无此岗位xyz');
+    if (total() !== 0) throw new Error('乱词没把列表筛空：' + total());
+    if (win.document.activeElement !== q('#jobQ')) throw new Error('重画后焦点丢了');
+    input(q('#jobQ'), '');
+    if (total() !== before) throw new Error('清空后未恢复：' + total() + ' / ' + before);
+  });
+
+  step('35 轮：GPA 分制选择器 —— 百分制 85 自动折算 3.7，说明里讲清口径', function () {
+    win.switchView('resume');
+    const st0 = JSON.parse(win.localStorage.getItem('zhiyin_state_v1'));
+    const raw = q('#profileForm [data-k="gpaRaw"]');
+    if (!raw) throw new Error('缺「成绩 + 分制」输入框');
+    input(raw, '85');
+    const sel = q('#profileForm [data-ksel="gpaScale"]');
+    if (!sel) throw new Error('缺分制选择器');
+    sel.value = '100';
+    sel.dispatchEvent(new win.Event('change', { bubbles: true }));
+    const st1 = JSON.parse(win.localStorage.getItem('zhiyin_state_v1'));
+    if (st1.profile.gpaScale !== 100) throw new Error('gpaScale 未保存：' + st1.profile.gpaScale);
+    if (st1.profile.gpa !== 3.7) throw new Error('折算值错误：' + st1.profile.gpa);
+    const hint = q('#gpaScaleHint').textContent;
+    if (hint.indexOf('3.7') < 0 || hint.indexOf('4 分制') < 0) throw new Error('折算说明没讲口径：' + hint);
+    /* 恢复现场：换回原来的成绩与分制，不影响后续用例 */
+    input(raw, String(st0.profile.gpaRaw || ''));
+    const sel2 = q('#profileForm [data-ksel="gpaScale"]');
+    sel2.value = String(st0.profile.gpaScale || 4);
+    sel2.dispatchEvent(new win.Event('change', { bubbles: true }));
+  });
+
+  step('35 轮：毕业时间是只读月份选择器（与经历起止时间同款）', function () {
+    const gy = q('#profileForm [data-k="gradYear"]');
+    if (!gy) throw new Error('缺毕业时间控件');
+    if (gy.tagName.toLowerCase() !== 'input' || gy.readOnly !== true) throw new Error('毕业时间应改为只读点选');
+    if (!gy.classList.contains('mp-in')) throw new Error('未用统一月份选择器组件');
+  });
+
+  step('35 轮：数据来源提示里的「职位采集」可直接点开导入弹窗', function () {
+    win.switchView('job');
+    /* 前面的用例导入过职位 —— 备份后清掉，让提示走「示例数据」分支（两个分支互斥） */
+    const stI = JSON.parse(win.localStorage.getItem('zhiyin_state_v1'));
+    const savedJobs = stI.importedJobs || [];
+    if (savedJobs.length) {
+      stI.importedJobs = [];
+      win.localStorage.setItem('zhiyin_state_v1', JSON.stringify(stI));
+      win.load();
+      win.renderJobs();
+    }
+    const lnk = q('#jobList [data-openimp="jobs"]');
+    if (!lnk) throw new Error('岗位池提示里没有可点击的「职位采集」');
+    click(lnk);
+    if (q('#modalTitle').textContent.indexOf('导入采集到的职位') < 0) {
+      throw new Error('点击「职位采集」没有打开导入弹窗：' + q('#modalTitle').textContent);
+    }
+    win.closeModal();
+    /* 恢复现场：把备份的导入职位原样放回去 */
+    if (savedJobs.length) {
+      const stR = JSON.parse(win.localStorage.getItem('zhiyin_state_v1'));
+      stR.importedJobs = savedJobs;
+      win.localStorage.setItem('zhiyin_state_v1', JSON.stringify(stR));
+      win.load();
+      win.renderJobs();
+    }
+  });
+
+  step('35 轮：侧栏「使用指南」讲清扩展安装与 JSON 导入', function () {
+    if (!q('#helpBtn')) throw new Error('侧栏缺「使用指南」按钮');
+    click(q('#helpBtn'));
+    const txt = q('#modalBody').textContent;
+    if (txt.indexOf('edge://extensions') < 0 || txt.indexOf('开发人员模式') < 0) throw new Error('没讲安装扩展');
+    if (txt.indexOf('复制 JSON') < 0) throw new Error('没讲怎么导入');
+    win.closeModal();
   });
 
   step('改写前后对比：原文 / 改写分行，高亮只覆盖新增片段', function () {

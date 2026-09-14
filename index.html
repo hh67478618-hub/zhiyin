@@ -795,11 +795,14 @@ button,.btn,.chip,.tab,.nav-item,.segmented button,.icon-btn,.tag-x,.clickable,a
   .btn.primary:hover{background:var(--grad-brand);border-color:transparent;color:#fff}
 
 /* 「第三十四轮」申学视图锚点子导航：页面长，一排小胶囊直接跳到对应卡片 */
-.page-nav{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:2px 0 16px;position:sticky;top:10px;z-index:40;background:rgba(246,241,231,.92);padding:8px 10px;border-radius:var(--pill);backdrop-filter:blur(6px);box-shadow:var(--shadow-xs);width:max-content;max-width:100%}
-.page-nav .pn-i{border:1px solid var(--line);background:var(--card);color:var(--ink2);font-size:12.5px;padding:5px 12px;border-radius:var(--pill);cursor:pointer;line-height:1.4}
-.page-nav .pn-i:hover{background:var(--brand-soft);border-color:var(--brand-line);color:var(--brand-deep)}
-.page-nav .pn-i.on{background:var(--grad-brand);border-color:transparent;color:#fff}
-.page-nav .pn-i.on:hover{background:var(--grad-brand);color:#fff}
+/* 第三十五轮：申学导航从一排小胶囊升成六张大模块卡 —— 让人一眼看清这个功能区的构成。
+   hover 有底色（浅紫），文字保持深色，不靠源码顺序定对比度。 */
+.page-nav{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:2px 0 18px}
+.page-nav .pn-c{display:flex;flex-direction:column;gap:3px;text-align:left;border:1px solid var(--line);background:var(--card);border-radius:var(--radius-m);padding:13px 14px;cursor:pointer;transition:.18s;position:relative;font:inherit}
+.page-nav .pn-c:hover{border-color:var(--brand-line);background:var(--brand-soft);box-shadow:var(--shadow-xs)}
+.page-nav .pn-c .pn-t{font-size:14px;font-weight:700;color:var(--ink)}
+.page-nav .pn-c .pn-d{font-size:12px;color:var(--ink3);line-height:1.5;padding-right:14px}
+.page-nav .pn-c .pn-go{position:absolute;right:12px;top:12px;color:var(--brand);font-weight:700}
 /* 「第三十四轮」新手引导条：四步走完「导入 → 核对 → 归纳 → 规划」 */
 .guide-strip{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:0 0 16px}
 .guide-step{display:flex;gap:9px;align-items:flex-start;background:var(--card);border:1px solid var(--line2);border-radius:var(--radius-m);padding:10px 12px;cursor:pointer}
@@ -832,6 +835,18 @@ button,.btn,.chip,.tab,.nav-item,.segmented button,.icon-btn,.tag-x,.clickable,a
   .guide-strip{grid-template-columns:1fr 1fr}
 }
 @media (max-width:640px){ .guide-strip{grid-template-columns:1fr} }
+
+  /* ===== 第三十五轮：可点击的数据来源提示 + 偏好分组折叠 ===== */
+  .brand-link{color:var(--brand);font-weight:600;cursor:pointer;text-decoration:underline;text-underline-offset:2px}
+  .brand-link:hover{color:var(--brand-deep)}
+  .cat-fold{border:1px solid var(--line);border-radius:var(--radius-m);margin-bottom:8px;background:var(--card)}
+  .cat-fold-h{display:flex;align-items:center;gap:10px;width:100%;border:0;background:none;font:inherit;cursor:pointer;padding:10px 12px;text-align:left;border-radius:var(--radius-m)}
+  .cat-fold-h:hover{background:var(--brand-soft)}
+  .cat-fold-t{font-size:13px;font-weight:700;color:var(--ink);flex:0 0 auto}
+  .cat-fold-sum{flex:1;font-size:12.5px;color:var(--ink2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .cat-fold-sum.dim{color:var(--ink3)}
+  .cat-fold-a{flex:0 0 auto;font-size:12px;color:var(--ink3)}
+  .cat-fold-b{padding:4px 12px 12px;border-top:1px dashed var(--line)}
 </style>
 </head>
 <body>
@@ -852,7 +867,8 @@ button,.btn,.chip,.tab,.nav-item,.segmented button,.icon-btn,.tag-x,.clickable,a
     </nav>
     <div class="side-foot">
       <div class="profile-chip" id="sideProfile"><b>尚未导入简历</b>解析后将自动生成能力画像</div>
-      <button class="btn sm" id="resetAll">清空本地数据</button>
+      <button class="btn sm" id="helpBtn" title="扩展怎么装、数据怎么导">使用指南</button>
+      <button class="btn sm" id="resetAll" style="margin-top:6px">清空本地数据</button>
       <div class="side-note">数据仅保存在本机浏览器，不会上传。</div>
     </div>
   </aside>
@@ -1463,6 +1479,9 @@ function defaultFilters() {
   return {
     studyRegion: '全部', studyTier: '全部', studySort: 'score', studyMin: 25,
     jobCity: '全部', jobType: '全部', jobIndustry: '全部', jobMin: 50,
+    /* 第三十五轮：岗位关键词搜索 + 偏好分组折叠状态。老存档缺键由 mergeState 的
+       Object.assign(defaultFilters(), …) 兜底补齐，不必动版本号。 */
+    jobQ: '', prefOpen: { city: false, type: false, ind: false },
     studyPage: 1, jobPage: 1
   };
 }
@@ -1470,7 +1489,7 @@ function defaultFilters() {
 function emptyProfile() {
   return {
     name: '', phone: '', email: '', city: '',
-    edu: '', school: '', major: '', gpa: null, gpaRaw: '', gradYear: '',
+    edu: '', school: '', major: '', gpa: null, gpaRaw: '', gpaScale: 4, gradYear: '',
     lang: { toefl: null, ielts: null, cet6: null, cet4: null },
     skills: [], papers: 0, paperText: '',
     research: '', intern: '', projText: '', expText: '', direction: '',
@@ -1999,6 +2018,12 @@ function gpaTo4(v, scale) {
   return +v.toFixed(2);
 }
 
+/* 第三十五轮：常见姓氏。「杨明翰 | 求职意向：…」这类首行带装饰的写法，
+   取前 2-4 个汉字，只有首字是常见姓氏才敢认成姓名（防把「某某大学」当人名），
+   且置信度只给「待确认」，请用户核对。 */
+const COMMON_SURNAMES = '王李张刘陈杨黄赵吴周徐孙马朱胡郭何林罗高郑梁谢宋唐许韩冯邓曹彭曾肖田董潘袁蔡蒋余杜叶程苏魏吕丁任沈姚卢姜崔钟谭陆汪范金石廖贾夏韦傅方白邹孟熊秦邱江尹薛闫段雷侯龙史陶黎贺顾毛郝龚邵万钱严覃武戴莫孔向汤'.split('');
+const COMPOUND_SURNAMES = ['欧阳', '司马', '上官', '诸葛', '皇甫', '司徒', '慕容', '端木'];
+
 function parseResume(raw) {
   const text = String(raw || '');
   const lower = text.toLowerCase();
@@ -2023,12 +2048,24 @@ function parseResume(raw) {
   p.rawText = text;
 
   // 姓名
+  let nameGuess = false;
   let m = text.match(/姓名[：:\s]*([\u4e00-\u9fa5]{2,4}|[A-Za-z][A-Za-z. ]{2,24})/);
   if (!m) {
     const first = (text.split(/\r?\n/).find(l => l.trim()) || '').trim();
-    if (first && first.length <= 12 && !/\d/.test(first) && !/简历/.test(first)) m = [null, first];
+    if (first && first.length <= 12 && !/\d/.test(first) && !/简历|模板|个人档案/.test(first)) m = [null, first];
   }
-  if (m) { p.name = m[1].trim(); meta.name = 'auto'; log.push(['已识别姓名：' + p.name, 1]); }
+  if (!m) {
+    /* 第三十五轮：首行「杨明翰 | 求职意向：产品运营」这类带装饰的写法。 */
+    const first = (text.split(/\r?\n/).find(l => l.trim()) || '').trim();
+    const nm = first.match(/^([\u4e00-\u9fa5]{2,4})(?=[\s（(|｜·・\-—,，、/：:]|$)/);
+    if (nm && !/\d/.test(first)
+      && (COMMON_SURNAMES.indexOf(nm[1][0]) >= 0 || COMPOUND_SURNAMES.some(function (s) { return nm[1].indexOf(s) === 0; }))
+      && !/(大学|学院|公司|集团|科技|医院|简历|团队|项目|专业|邮箱|电话)/.test(nm[1])) {
+      m = [null, nm[1]];
+      nameGuess = true;
+    }
+  }
+  if (m) { p.name = m[1].trim(); meta.name = nameGuess ? 'guess' : 'auto'; log.push(['已识别姓名：' + p.name + (nameGuess ? '（置信度较低，建议核对）' : ''), 1]); }
   else { meta.name = 'miss'; log.push(['未识别到姓名，请手动补充', 0]); }
 
   // 电话 / 邮箱
@@ -2125,23 +2162,27 @@ function parseResume(raw) {
     if (pm && parseFloat(pm[1]) > 10) { rawGpa = parseFloat(pm[1]); scale = 100; }
   }
   if (rawGpa != null) {
-    p.gpaRaw = rawGpa + (scale === 100 ? '/100（百分制）' : (scale && scale !== 4 ? '/' + scale : ''));
+    /* 第三十五轮：gpaRaw 只存原始数值，分制单独存 gpaScale（表单里有分制选择器）。 */
+    p.gpaRaw = String(rawGpa);
+    p.gpaScale = scale;
     p.gpa = gpaTo4(rawGpa, scale);
     meta.gpa = 'auto';
-    log.push(['已识别成绩：' + rawGpa + (scale && scale !== 4 ? '/' + scale : '') + ' ，折算 4 分制约 ' + p.gpa, 1]);
+    log.push(['已识别成绩：' + rawGpa + (scale === 100 ? '（百分制）' : (scale !== 4 ? '/' + scale + ' 分制' : '（4 分制）')) + '，折算 4 分制约 ' + p.gpa, 1]);
   } else { meta.gpa = 'miss'; log.push(['未识别到 GPA / 平均分', 0]); }
 
   // 毕业时间：只在教育段落里找，取含学历关键词那行中最大的年份（避免误取项目的「毕业设计」日期）
   let gradYear = null, gradMonth = null;
   eduText.split(/\r?\n/).forEach(function (line) {
     if (!/(博士|硕士|研究生|本科|学士|Bachelor|Master)/.test(line)) return;
-    const ys = (line.match(/20\d{2}/g) || []).map(Number);
+    /* 第三十五轮加固：年份限定 2010-2040（论文 ISSN 2095-8439 里的 2095 不再当毕业年）；
+       月份限定 1-12，且后面不能再跟数字（8439 不会被截成月份 84）。 */
+    const ys = (line.match(/20\d{2}/g) || []).map(Number).filter(function (y) { return y >= 2010 && y <= 2040; });
     if (!ys.length) return;
     const y = Math.max.apply(null, ys);
     if (gradYear == null || y > gradYear) {
       gradYear = y;
-      const mm = line.match(new RegExp(y + '\\s*[年.\\-\\/]\\s*(\\d{1,2})'));
-      gradMonth = mm ? +mm[1] : null;
+      const mm = line.match(new RegExp(y + '\\s*[年.\\-\\/]\\s*(\\d{1,2})(?!\\d)'));
+      gradMonth = (mm && +mm[1] >= 1 && +mm[1] <= 12) ? +mm[1] : null;
     }
   });
   if (gradYear == null) {
@@ -2529,11 +2570,19 @@ function initRestoreStrip() {
 function bindStudyNav() {
   const nav = document.getElementById("studyNav");
   if (!nav) return;
-  const items = [["phdFit", "适配评估"], ["studyPref", "规划偏好"], ["dailyPush", "每日推送"], ["docAdapt", "文书适配"], ["profSearch", "导师套磁"], ["schoolList", "院校名单"]];
-  nav.innerHTML = items.map(function (it) { return '<button type="button" class="pn-i" data-pn="' + it[0] + '">' + it[1] + '</button>'; }).join("");
+  /* 第三十五轮：大模块卡 —— 名称 + 一句「这里面是什么」，点卡片平滑跳到对应区块。 */
+  const items = [
+    ["phdFit", "适配评估", "博士五维评分与补强建议"],
+    ["studyPref", "规划偏好", "方向 · 地区 · 学制 · 院校层次"],
+    ["dailyPush", "每日推送", "按日期轮换的院校项目推荐"],
+    ["docAdapt", "文书适配", "从经历挑素材，生成文书底稿"],
+    ["profSearch", "导师套磁", "找教授主页，生成套磁邮件"],
+    ["schoolList", "院校名单", "冲刺 / 稳妥 / 保底清单"]
+  ];
+  nav.innerHTML = items.map(function (it) { return '<button type="button" class="pn-c" data-pn="' + it[0] + '"><span class="pn-t">' + it[1] + '</span><span class="pn-d">' + it[2] + '</span><span class="pn-go">→</span></button>'; }).join("");
   nav.querySelectorAll("[data-pn]").forEach(function (b) {
     b.onclick = function () {
-      nav.querySelectorAll(".pn-i").forEach(function (x) { x.classList.remove("on"); });
+      nav.querySelectorAll(".pn-c").forEach(function (x) { x.classList.remove("on"); });
       b.classList.add("on");
       const t = document.getElementById(b.getAttribute("data-pn"));
       if (t && t.scrollIntoView) t.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -2557,6 +2606,15 @@ function optList(arr, cur) {
   return ['<option value="">请选择</option>'].concat(arr.map(v => '<option' + (v === cur ? ' selected' : '') + '>' + v + '</option>')).join('');
 }
 
+/* 第三十五轮：GPA 折算说明。申学场景里院校门槛与五维评分都以 4 分制为口径，
+   统一折算才能横向比较；非 4 分制的学校在这里选自己的分制，系统自动折算。 */
+function gpaScaleHint(p) {
+  const sc = +p.gpaScale || 4;
+  const raw = parseFloat(p.gpaRaw);
+  if (isNaN(raw)) return '统一按 4 分制口径参与评分与门槛比较；非 4 分制选右侧分制，自动折算';
+  return '折算 4 分制 ≈ ' + gpaTo4(raw, sc) + '（' + (sc === 100 ? '百分制' : sc + ' 分制') + ' ' + p.gpaRaw + ' → 4 分制，门槛判断用折算值）';
+}
+
 function renderProfileForm() {
   const p = state.profile;
   const m = state.meta || {};
@@ -2578,8 +2636,15 @@ function renderProfileForm() {
   html.push('<div class="' + cls('edu') + '"><label>最高学历 ' + flag('edu') + '</label><select data-k="edu">' + optList(['本科', '硕士', '博士'], p.edu) + '</select></div>');
   html.push('<div class="' + cls('school') + '"><label>毕业院校 ' + flag('school') + '</label><input data-k="school" value="' + esc(p.school) + '"></div>');
   html.push('<div class="' + cls('major') + '"><label>专业 ' + flag('major') + '</label><input data-k="major" value="' + esc(p.major) + '"></div>');
-  html.push('<div class="' + cls('gpa') + '"><label>GPA（4 分制） ' + flag('gpa') + '</label><input data-k="gpa" value="' + (p.gpa == null ? '' : p.gpa) + '" placeholder="如：3.6"' + (p.gpaRaw ? ' title="原始：' + esc(p.gpaRaw) + '"' : '') + '></div>');
-  html.push('<div class="' + cls('gradYear') + '"><label>毕业时间 ' + flag('gradYear') + '</label><input data-k="gradYear" value="' + esc(p.gradYear) + '" placeholder="如：2026-06"></div>');
+  /* 第三十五轮：GPA 带分制选择器；毕业时间换成与经历起止时间同一个月份选择器（只读，点选）。 */
+  html.push('<div class="' + cls('gpa') + '"><label>GPA（成绩 + 分制） ' + flag('gpa') + '</label>' +
+    '<div style="display:flex;gap:8px;align-items:center">' +
+    '<input data-k="gpaRaw" value="' + esc(p.gpaRaw) + '" placeholder="如：3.6 或 85" style="flex:1;min-width:0">' +
+    '<select data-ksel="gpaScale" title="你的学校用的计分制">' +
+    [4, 4.5, 5, 100].map(function (sc) { return '<option value="' + sc + '"' + ((+p.gpaScale || 4) === sc ? ' selected' : '') + '>' + (sc === 100 ? '百分制' : sc + ' 分制') + '</option>'; }).join('') +
+    '</select></div>' +
+    '<div class="hint" id="gpaScaleHint" style="margin-top:4px">' + gpaScaleHint(p) + '</div></div>');
+  html.push('<div class="' + cls('gradYear') + '"><label>毕业时间（点选年月） ' + flag('gradYear') + '</label><input type="text" readonly class="mp-in" data-k="gradYear" value="' + esc(p.gradYear) + '" placeholder="点选年月"></div>');
   html.push('<div class="field"><label>专业方向（用于匹配）</label><select data-k="group">' +
     Object.keys(FIELD_MAP).map(k => '<option value="' + k + '"' + (k === p.group ? ' selected' : '') + '>' + FIELD_MAP[k].name + '</option>').join('') + '</select></div>');
   html.push('</div></div>');
@@ -2610,7 +2675,7 @@ function renderProfileForm() {
   /* 字段 -> 决定「待补充」状态的 meta 键。语言三项共用 lang，其余各自独立。 */
   const META_KEY = {
     name: 'name', city: 'city', phone: 'phone', email: 'email', edu: 'edu', school: 'school',
-    major: 'major', gpa: 'gpa', gradYear: 'gradYear', toefl: 'lang', ielts: 'lang', cet6: 'lang',
+    major: 'major', gpa: 'gpa', gpaRaw: 'gpa', gradYear: 'gradYear', toefl: 'lang', ielts: 'lang', cet6: 'lang',
     research: 'research', expText: 'exp', direction: 'direction'
   };
   /* 「这个字段此刻算不算已补充」——这是标签能否消失的唯一依据。
@@ -2626,7 +2691,8 @@ function renderProfileForm() {
      整表重渲染会让输入框失去焦点，用户打到一半就断——这是上一版最大的体验坑。 */
   function paintField(el, metaKey) {
     if (!el) return;
-    const wrap = el.parentNode;
+    /* 第三十五轮：GPA 字段内嵌了「成绩 + 分制」flex 行，容器要向上找到 .field 才是刷状态的地方 */
+    const wrap = el.closest('.field') || el.parentNode;
     if (!wrap || !wrap.classList) return;
     const st = state.meta[metaKey];
     wrap.classList.toggle('miss', st === 'miss');
@@ -2639,11 +2705,19 @@ function renderProfileForm() {
   }
 
   $$('#profileForm [data-k]').forEach(function (el) {
-    const ev = (el.tagName === 'SELECT') ? 'change' : 'input';
+    /* 第三十五轮：毕业时间是只读的月份选择器（mp-in），只有 change 事件；其余照旧。 */
+    const ev = (el.tagName === 'SELECT' || el.classList.contains('mp-in')) ? 'change' : 'input';
     el.addEventListener(ev, function () {
       const k = el.dataset.k;
       if (k === 'toefl' || k === 'ielts' || k === 'cet6') {
         state.profile.lang[k] = el.value === '' ? null : parseFloat(el.value);
+      } else if (k === 'gpaRaw') {
+        /* 第三十五轮：原始成绩 + 分制 → 折算 4 分制存进 gpa（评分与门槛只认折算值）。 */
+        state.profile.gpaRaw = el.value.trim();
+        const rv = parseFloat(state.profile.gpaRaw);
+        state.profile.gpa = (state.profile.gpaRaw !== '' && !isNaN(rv)) ? gpaTo4(rv, +state.profile.gpaScale || 4) : null;
+        const gh = $('#gpaScaleHint');
+        if (gh) gh.textContent = gpaScaleHint(state.profile);
       } else if (k === 'gpa' || k === 'papers') {
         state.profile[k] = el.value === '' ? (k === 'gpa' ? null : 0) : parseFloat(el.value);
       } else {
@@ -2674,6 +2748,19 @@ function renderProfileForm() {
       save(); renderTop();
     });
   });
+
+  /* 第三十五轮：分制选择器。换分制后用同一个原始成绩重新折算。 */
+  const gsSel = $('#profileForm [data-ksel="gpaScale"]');
+  if (gsSel) gsSel.addEventListener('change', function () {
+    state.profile.gpaScale = parseFloat(gsSel.value) || 4;
+    const rv = parseFloat(state.profile.gpaRaw);
+    if (!isNaN(rv)) state.profile.gpa = gpaTo4(rv, state.profile.gpaScale);
+    const gh = $('#gpaScaleHint');
+    if (gh) gh.textContent = gpaScaleHint(state.profile);
+    state.meta.gpa = String(state.profile.gpaRaw || '').trim() !== '' ? 'user' : 'miss';
+    save(); renderTop();
+  });
+  bindMonthPickers();   /* 表单重画后毕业时间输入框是新的，补绑月份选择器（幂等） */
 
   const inp = $('#skillInput'), addBtn = $('#skillAdd');
   if (inp) {
@@ -2862,7 +2949,7 @@ function renderSchoolList() {
 
   const regions = ['全部'].concat(uniq(schoolPool().map(s => s.region)));
   const html = [];
-  html.push('<div class="card-h"><div><h3>院校项目匹配库</h3><div class="desc">共 ' + rows.length + ' 个符合条件的项目　默认按匹配度从高到低　冲刺 ' + rows.filter(x => x.m.tier === '冲刺').length + ' · 稳妥 ' + rows.filter(x => x.m.tier === '稳妥').length + ' · 保底 ' + rows.filter(x => x.m.tier === '保底').length + '　<span class="hint">示例数据：内置 ' + SCHOOLS.length + ' 条院校信息（非官方同步），用来体验匹配逻辑；真实项目请用「院校项目采集」导入，条件以院校官网为准</span></div></div></div>');
+  html.push('<div class="card-h"><div><h3>院校项目匹配库</h3><div class="desc">共 ' + rows.length + ' 个符合条件的项目　默认按匹配度从高到低　冲刺 ' + rows.filter(x => x.m.tier === '冲刺').length + ' · 稳妥 ' + rows.filter(x => x.m.tier === '稳妥').length + ' · 保底 ' + rows.filter(x => x.m.tier === '保底').length + '　<span class="hint">示例数据：内置 ' + SCHOOLS.length + ' 条院校信息（非官方同步），用来体验匹配逻辑；真实项目请用<span class="brand-link" data-openimp="programs" role="button" tabindex="0">「院校项目采集」</span>导入，条件以院校官网为准</span></div></div></div>');
   html.push('<div class="filters">');
   html.push('<select id="fRegion">' + regions.map(r => '<option' + (r === state.filters.studyRegion ? ' selected' : '') + '>' + r + '</option>').join('') + '</select>');
   html.push('<select id="fTier">' + ['全部', '冲刺', '稳妥', '保底', '差距较大'].map(r => '<option' + (r === state.filters.studyTier ? ' selected' : '') + '>' + r + '</option>').join('') + '</select>');
@@ -3528,6 +3615,19 @@ function doAdapt(jd, strength, activeJobId) {
   return doAdaptFromInventory(jd, { max: STRENGTH_MAX[strength] || 6, mode: mode });
 }
 
+/* 第三十五轮：偏好区折叠。三类标签逐组展开太占屏（整卡近三屏高），
+   收成一行摘要 + 展开；展开状态记在 filters.prefOpen 里，重画后不丢。 */
+function catFoldHtml(key, label, selected, bodyId, bodyHtml) {
+  const open = state.filters.prefOpen && state.filters.prefOpen[key];
+  const sum = selected.length ? selected.join('、') : '不限';
+  return '<div class="cat-fold">' +
+    '<button type="button" class="cat-fold-h" data-fold-t="' + key + '" aria-expanded="' + (open ? 'true' : 'false') + '">' +
+    '<span class="cat-fold-t">' + esc(label) + '</span>' +
+    '<span class="cat-fold-sum' + (selected.length ? '' : ' dim') + '">' + esc(sum.length > 44 ? sum.slice(0, 44) + '…' : sum) + '</span>' +
+    '<span class="cat-fold-a">' + (open ? '▴ 收起' : '▾ 展开') + '</span></button>' +
+    '<div class="cat-fold-b" id="' + bodyId + '"' + (open ? '' : ' hidden') + '>' + bodyHtml + '</div></div>';
+}
+
 function renderJobPref() {
   const prefs = state.jobPref;
   const W = prefs.weights;
@@ -3540,16 +3640,16 @@ function renderJobPref() {
   const indCfg = { id: 'indBlk', groups: INDUSTRY_GROUPS, selected: prefs.industries, custom: prefs.customIndustries, data: 'ind', counts: labelCounts(INDUSTRY_GROUPS, JOBS, j => j.industry), ph: '输入行业，如：跨境电商' };
 
   const html = [];
-  html.push('<div class="card-h"><div><h3>求职偏好与差异化推荐</h3><div class="desc">每一类都能自己输入标签，数字是当前岗位库里的实际数量；「一个都不选」= 在全部岗位内按匹配度降序检索</div></div>' +
-    '<div class="row"><button class="btn sm" id="importJobsBtn">导入职位</button></div></div>');
-  html.push('<div class="hint" style="margin-bottom:2px">期望城市</div>');
-  html.push('<div id="cityBlk">' + catBlockHtml(cityCfg) + '</div>');
-  html.push('<div class="divider"></div>');
-  html.push('<div class="hint" style="margin-bottom:2px">岗位类型</div>');
-  html.push('<div id="typeBlk">' + catBlockHtml(typeCfg) + '</div>');
-  html.push('<div class="divider"></div>');
-  html.push('<div class="hint" style="margin-bottom:2px">行业倾向</div>');
-  html.push('<div id="indBlk">' + catBlockHtml(indCfg) + '</div>');
+  /* 第三十五轮：标题/说明按「筛选统计」口径改写；「导入采集职位」升为主按钮 ——
+     扩展采集是本软件的核心用法，入口不能只是灰色小按钮藏在右上角。 */
+  html.push('<div class="card-h"><div><h3>求职偏好与筛选</h3><div class="desc">每一类都能自己输入标签，数字是当前岗位库里的实际数量；岗位按照匹配度降序检索</div></div>' +
+    '<div class="row"><button class="btn sm primary" id="importJobsBtn" title="本软件的核心用法之一：浏览器扩展采集职位 → 复制 JSON → 粘贴进匹配池">导入采集职位</button></div></div>');
+  /* 第三十五轮：改名去误导 —— 这三组展示的是「已采集岗位」的分布统计（数字是岗位库实际数量），
+     不是给求职人的推荐项；同时折叠紧凑，缩短与下方岗位列表的距离。 */
+  html.push('<div class="hint" style="margin-bottom:8px">数字 = 已采集岗位里该类的实际数量；选中即作为偏好参与排序，不选 = 不限</div>');
+  html.push(catFoldHtml('city', '按城市筛选', prefs.cities, 'cityBlk', catBlockHtml(cityCfg)));
+  html.push(catFoldHtml('type', '按岗位类型筛选', prefs.types, 'typeBlk', catBlockHtml(typeCfg)));
+  html.push(catFoldHtml('ind', '按行业筛选', prefs.industries, 'indBlk', catBlockHtml(indCfg)));
   html.push('<div class="divider"></div>');
   html.push('<div class="grid-2" style="gap:22px"><div><div class="hint" style="margin-bottom:8px">薪资下限 <b style="color:#4F46E5">' + prefs.salaryMin + 'k / 月</b></div>');
   html.push('<div class="slider-row"><input type="range" min="5" max="45" value="' + prefs.salaryMin + '" id="salaryMin"><span class="hint">低于该值的岗位会被降权</span></div></div>');
@@ -3563,6 +3663,20 @@ function renderJobPref() {
   /* 标签区本身也要跟着重画：否则新增的自定义标签不会出现在「我的标签」里 */
   const ijb = $('#importJobsBtn');
   if (ijb) ijb.addEventListener('click', openImportJobs);
+  /* 折叠头：只翻 DOM 状态，不整卡重画（展开状态记在 filters.prefOpen，重画也不丢） */
+  $$('#jobPrefCard [data-fold-t]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      const key = b.getAttribute('data-fold-t');
+      state.filters.prefOpen = state.filters.prefOpen || {};
+      state.filters.prefOpen[key] = !state.filters.prefOpen[key];
+      const body = b.parentNode.querySelector('.cat-fold-b');
+      if (body) body.hidden = !state.filters.prefOpen[key];
+      const a = b.querySelector('.cat-fold-a');
+      if (a) a.textContent = state.filters.prefOpen[key] ? '▴ 收起' : '▾ 展开';
+      b.setAttribute('aria-expanded', state.filters.prefOpen[key] ? 'true' : 'false');
+      save();
+    });
+  });
   bindCat(cityCfg, renderJobs);
   bindCat(typeCfg, renderJobs);
   bindCat(indCfg, renderJobs);
@@ -3592,6 +3706,12 @@ function renderJobList() {
   if (!p.parsed) { $('#jobList').innerHTML = emptyBox('先导入简历，才能计算岗位匹配度', '解析出技能、方向与实践经历后，这里会按匹配权重给出排序结果。'); return; }
   const prefs = state.jobPref;
   let rows = JOBS.map(j => ({ j: j, m: jobMatch(j, p, prefs) }));
+  /* 第三十五轮：关键词过滤（公司 / 岗位 / 行业 / 城市 / 技能）。 */
+  const jobQ = String(state.filters.jobQ || '').trim().toLowerCase();
+  if (jobQ) rows = rows.filter(function (x) {
+    const hay = (x.j.company + ' ' + x.j.position + ' ' + (x.j.industry || '') + ' ' + (x.j.city || '') + ' ' + (x.j.skills || []).join(' ')).toLowerCase();
+    return hay.indexOf(jobQ) >= 0;
+  });
   if (state.filters.jobCity !== '全部') rows = rows.filter(x => x.j.city === state.filters.jobCity);
   if (state.filters.jobType !== '全部') rows = rows.filter(x => x.m.type === state.filters.jobType);
   if (state.filters.jobIndustry !== '全部') rows = rows.filter(x => x.j.industry === state.filters.jobIndustry);
@@ -3610,8 +3730,10 @@ function renderJobList() {
 
   const html = [];
   const impN = (state.importedJobs || []).length;
-  html.push('<div class="card-h"><div><h3>岗位匹配排序</h3><div class="desc">共 ' + rows.length + ' 个岗位　' + ((prefs.cities.length || prefs.types.length || prefs.industries.length) ? '已在所选偏好范围内' : '未设置偏好，在全部岗位内') + '按匹配权重降序排列　最高匹配度 ' + (rows[0] ? rows[0].m.score : 0) + ' 分　<span class="hint">岗位池 ' + JOBS.length + ' 条' + (impN ? '（导入 ' + impN + ' 条）' : '（示例数据，非官方同步；真实岗位请用「职位采集」导入）') + '，薪资与要求以官网 JD 为准</span></div></div></div>');
+  html.push('<div class="card-h"><div><h3>岗位匹配排序</h3><div class="desc">共 ' + rows.length + ' 个岗位　' + ((prefs.cities.length || prefs.types.length || prefs.industries.length) ? '已在所选偏好范围内' : '未设置偏好，在全部岗位内') + '按匹配权重降序排列　最高匹配度 ' + (rows[0] ? rows[0].m.score : 0) + ' 分　<span class="hint">岗位池 ' + JOBS.length + ' 条' + (impN ? '（导入 ' + impN + ' 条）' : '（示例数据，非官方同步；真实岗位请用<span class="brand-link" data-openimp="jobs" role="button" tabindex="0">「职位采集」</span>导入）') + '，薪资与要求以官网 JD 为准</span></div></div></div>');
   html.push('<div class="filters">');
+  /* 第三十五轮：关键词搜索。输入即筛，重画后把焦点和光标位置还回去。 */
+  html.push('<input type="text" id="jobQ" placeholder="搜索岗位 / 公司 / 技能" value="' + esc(state.filters.jobQ || '') + '" style="flex:1;min-width:150px">');
   html.push('<select id="jCity">' + cities.map(r => '<option' + (r === state.filters.jobCity ? ' selected' : '') + '>' + r + '</option>').join('') + '</select>');
   html.push('<select id="jType">' + types.map(r => '<option' + (r === state.filters.jobType ? ' selected' : '') + '>' + r + '</option>').join('') + '</select>');
   html.push('<select id="jInd">' + inds.map(r => '<option' + (r === state.filters.jobIndustry ? ' selected' : '') + '>' + r + '</option>').join('') + '</select>');
@@ -3640,6 +3762,15 @@ function renderJobList() {
   html.push(pagerHtml(rows.length, state.filters.jobPage, jobPages, '个岗位'));
   $('#jobList').innerHTML = html.join('');
 
+  const jobQInp = $('#jobQ');
+  if (jobQInp) jobQInp.addEventListener('input', function () {
+    const pos = jobQInp.selectionStart;
+    state.filters.jobQ = jobQInp.value;
+    save();
+    renderJobList();
+    const nq = $('#jobQ');
+    if (nq) { try { nq.focus(); nq.setSelectionRange(pos, pos); } catch (e) { /* 环境不支持时忽略 */ } }
+  });
   $('#jCity').addEventListener('change', e => { state.filters.jobCity = e.target.value; state.filters.jobPage = 1; save(); renderJobList(); });
   $('#jType').addEventListener('change', e => { state.filters.jobType = e.target.value; state.filters.jobPage = 1; save(); renderJobList(); });
   $('#jInd').addEventListener('change', e => { state.filters.jobIndustry = e.target.value; state.filters.jobPage = 1; save(); renderJobList(); });
@@ -5513,7 +5644,8 @@ function openImportJobs() {
     '<div class="field"><label>采集结果 JSON</label>' +
     '<textarea id="importJobsJson" style="min-height:200px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.5px;line-height:1.6" ' +
     'placeholder=\'{"schema":"zhiyin.jobs.v1","items":[{"company":"某公司","position":"后端开发工程师","city":"北京","edu":"本科","salaryRaw":"25-40K","skills":["Go","Redis"]}]}\'></textarea></div>',
-    '<div class="hint" style="margin-top:10px">没有原始 JSON？在扩展弹窗点「复制 JSON」，再粘贴到这里即可。导入后会立即进入匹配池，按你设置的偏好与权重参与排序。</div>'
+    '<div class="hint" style="margin-top:10px">没有原始 JSON？在扩展弹窗点「复制 JSON」，再粘贴到这里即可。导入后会立即进入匹配池，按你设置的偏好与权重参与排序。</div>' +
+    '<div class="hint" style="margin-top:6px">还没装扩展？侧栏底部有「使用指南」，两步装好。</div>'
   ].join('');
   openModal('导入采集到的职位', '扩展采集 → 进匹配池 → 参与推荐排序', body, [
     { label: '取消', cls: 'btn', act: closeModal },
@@ -5785,7 +5917,33 @@ async function extractPdf(file, log) {
   for (let i = 1; i <= doc.numPages; i++) {
     const pg = await doc.getPage(i);
     const tc = await pg.getTextContent();
-    out.push(tc.items.map(it => it.str).join(' '));
+    /* 第三十五轮：按行重组。旧实现把整页文本用空格拼成一行，后果有两个：
+       ① 「姓名在第一行」的前提消失 → 姓名永远识别不到；
+       ② 论文行里的 ISSN（2095-8439）混进教育行 → 毕业时间被解析成 2095-84。
+       pdf.js 给每个文本片段自带坐标（transform[4]=x, [5]=y）：同一行（y 差 ≤ 2）内按 x 排序，
+       片段间距大时补一个空格（英文词界），行与行之间换行。 */
+    const rows = [];
+    let cur = null;
+    tc.items.forEach(function (it) {
+      const y = it.transform[5];
+      if (!cur || Math.abs(y - cur.y) > 2) { cur = { y: y, items: [] }; rows.push(cur); }
+      cur.items.push(it);
+    });
+    rows.sort(function (a, b) { return b.y - a.y; });
+    const pageLines = rows.map(function (r) {
+      r.items.sort(function (a, b) { return a.transform[4] - b.transform[4]; });
+      let s = '', prev = null;
+      r.items.forEach(function (it) {
+        if (prev) {
+          const prevEnd = prev.transform[4] + (prev.width || 0);
+          if (it.transform[4] - prevEnd > 1.5) s += ' ';
+        }
+        s += it.str;
+        prev = it;
+      });
+      return s;
+    });
+    out.push(pageLines.join('\n'));
   }
   return out.join('\n');
 }
@@ -6939,6 +7097,28 @@ function doAdaptFromInventory(jd, opts) {
   };
 }
 
+/* 第三十五轮：数据来源提示里的「职位采集 / 院校项目采集」直接点开对应导入弹窗。 */
+document.addEventListener('click', function (e) {
+  const t = e.target && e.target.closest ? e.target.closest('[data-openimp]') : null;
+  if (!t) return;
+  e.preventDefault();
+  if (t.getAttribute('data-openimp') === 'jobs') openImportJobs();
+  else openImportPrograms();
+});
+
+/* 第三十五轮：使用指南 —— 新用户没人读 README，扩展怎么装要在应用里说清楚。 */
+function openHelpModal() {
+  openModal('使用指南', '扩展安装 · 数据导入 · 数据安全',
+    '<div class="hint"><b>第一步 · 安装扩展（约两分钟）</b><br>' +
+    '浏览器地址栏输入 <code>edge://extensions</code>（Chrome 输入 <code>chrome://extensions</code>）→ 打开「开发人员模式」→ 点「加载解压缩的扩展」→ 选择随本应用附带的扩展文件夹（发布包里叫 <b>extension</b>，本地是项目下的「浏览器采集插件」目录）→ 装完在工具栏把扩展固定住，方便随手点。</div>' +
+    '<div class="hint" style="margin-top:10px"><b>第二步 · 在网页上一键采集</b><br>' +
+    '招聘网站的职位列表页、院校项目页、官网申请表的提交页：点扩展图标，按面板提示识别，本页能采的字段会亮起来。</div>' +
+    '<div class="hint" style="margin-top:10px"><b>第三步 · 复制 JSON 回来粘贴</b><br>' +
+    '点扩展面板里的「复制 JSON」，回到本应用对应的导入入口（求职匹配 → 导入采集职位；申学规划 → 导入院校项目；投递中心 → 导入回执 / 状态）粘贴即可。职位进匹配池参与排序，项目进匹配库，回执进投递时间轴。</div>' +
+    '<div class="hint" style="margin-top:10px"><b>数据安全</b><br>扩展只在你本机工作，JSON 不经过任何服务器；本应用的所有数据也只存在你的浏览器里。</div>',
+    [{ label: '知道了', cls: 'btn primary', act: closeModal }]);
+}
+
 function init() {
   load();
   renderTop(); renderProfileForm();
@@ -6966,6 +7146,7 @@ function init() {
     if (!state.profile.parsed) { toast('先导入或粘贴一份简历，解析出画像后才能开始规划', '还差一步'); return; }
     switchView('study');
   });
+  $('#helpBtn').addEventListener('click', openHelpModal);   /* 第三十五轮 */
   $('#resetAll').addEventListener('click', function () {
     openModal('清空本地数据', '将删除浏览器中保存的简历画像、偏好与投递记录', '<div class="hint">此操作不可撤销。清空后需要重新导入简历。</div>', [
       { label: '取消', cls: 'btn', act: closeModal },
