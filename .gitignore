@@ -1,0 +1,12 @@
+# 依赖与编辑器
+node_modules/
+package-lock.json
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# 本地临时文件
+*.log
+_tmp/
+.workbuddy/

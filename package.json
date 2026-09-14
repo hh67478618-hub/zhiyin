@@ -1,0 +1,27 @@
+{
+  "name": "zhiyin",
+  "version": "1.0.0",
+  "description": "职引 · 求职与申学规划台 —— 单文件、零依赖的一站式求职与申学规划工具",
+  "private": true,
+  "scripts": {
+    "test": "node tests/engine.test.js",
+    "test:all": "node tests/engine.test.js && node tests/interaction.test.js && node tests/collector.test.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": ""
+  },
+  "keywords": [
+    "job-search",
+    "career-planning",
+    "resume",
+    "single-file",
+    "vanilla-js",
+    "prototype"
+  ],
+  "author": "hh67478618-hub",
+  "license": "MIT",
+  "devDependencies": {
+    "jsdom": "^24.0.0"
+  }
+}

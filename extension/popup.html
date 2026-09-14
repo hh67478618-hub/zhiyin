@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<style>
+  * { box-sizing: border-box; }
+  body { width: 400px; margin: 0; padding: 12px; font: 13px/1.6 system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif; color: #1f2328; background: #fff; }
+  h1 { font-size: 14px; font-weight: 500; margin: 0 0 4px; }
+  .sub { font-size: 12px; color: #6b7280; margin-bottom: 10px; }
+  .banner { border: 1px solid #e5e7eb; border-radius: 8px; padding: 8px 10px; background: #f9fafb; font-size: 12px; color: #4b5563; margin-bottom: 10px; }
+  .banner.warn { border-color: #f3d08a; background: #fdf7ea; color: #7a5310; }
+  .banner.err { border-color: #f0b4b4; background: #fdeeee; color: #96201f; }
+  .item { border: 1px solid #e5e7eb; border-radius: 8px; padding: 8px 10px; margin-bottom: 7px; }
+  .item.off { opacity: .45; }
+  .line { display: flex; align-items: flex-start; gap: 7px; }
+  .line input { margin-top: 3px; }
+  .who { font-weight: 500; }
+  .meta { font-size: 12px; color: #6b7280; }
+  .pill { display: inline-block; font-size: 11px; padding: 1px 6px; border-radius: 999px; background: #eef2ff; color: #3730a3; margin-right: 5px; }
+  .pill.miss { background: #fdf1e3; color: #92620f; }
+  .raw { font-size: 12px; color: #6b7280; margin-top: 3px; }
+  .foot { display: flex; gap: 8px; margin-top: 10px; }
+  button { flex: 1; padding: 8px 10px; border-radius: 8px; border: 1px solid #d0d5dd; background: #fff; font: inherit; cursor: pointer; }
+  button.primary { background: #4f46e5; border-color: #4f46e5; color: #fff; }
+  button:disabled { opacity: .5; cursor: default; }
+  .sect { margin-top: 14px; border-top: 1px solid #e5e7eb; padding-top: 12px; }
+  .sect h2 { font-size: 14px; font-weight: 500; margin: 0 0 4px; }
+  .kv { display: flex; gap: 8px; font-size: 12px; margin-top: 4px; }
+  .kv .k { color: #6b7280; min-width: 58px; }
+  .kv .v { flex: 1; word-break: break-all; }
+</style>
+</head>
+<body>
+  <h1>投递状态采集</h1>
+  <div class="sub">只读当前页面已显示的文字，不发起请求、不模拟登录。</div>
+  <div id="banner" class="banner">正在读取当前页面…</div>
+  <div id="list"></div>
+  <div class="foot">
+    <button id="toggle">全不选</button>
+    <button id="copy" class="primary" disabled>复制 JSON</button>
+  </div>
+  <div class="sect">
+    <h2>职位采集</h2>
+    <div class="sub">刷到职位列表页（牛客 / 官网招聘列表）点一下，把这一页的岗位收进求职app的匹配池。翻一页采一次。</div>
+    <div id="jbBanner" class="banner">在职位列表页点「采集本页职位」。</div>
+    <div id="jbList"></div>
+    <div class="foot">
+      <button id="jbGo">采集本页职位</button>
+      <button id="jbCopy" class="primary" disabled>复制职位 JSON</button>
+    </div>
+  </div>
+  <div class="sect">
+    <h2>投递回执</h2>
+    <div class="sub">停在「提交成功页」或某条投递的详情页，生成一张提交凭证（投了没 / 什么时候投 / 申请号）。</div>
+    <div id="rcBanner" class="banner">点下面的按钮，从当前页面生成回执。</div>
+    <div id="rcBody"></div>
+    <div class="foot">
+      <button id="rcMake">生成投递回执</button>
+      <button id="rcCopy" class="primary" disabled>复制回执 JSON</button>
+    </div>
+  </div>
+  <div class="sect">
+    <h2>辅助填写</h2>
+    <div class="sub">在公司官网的申请表页：粘贴求职app「准备投递」弹窗里「复制填表数据」导出的 JSON，代填输入框。只填不提交——最后那一下由你亲手点。<br>它会填两遍：第一遍填姓名/邮箱这类普通输入框，第二遍专门处理<b>公司名称 / 学校名称 / 起止时间</b>这种带检索下拉或日期面板的栏。</div>
+    <div id="ffBanner" class="banner">把填表 JSON 粘到下面，点「填充当前页」。</div>
+    <textarea id="ffInput" style="width:100%;height:86px;font:12px/1.5 Consolas,monospace;margin-bottom:8px;padding:6px;border:1px solid #d0d5dd;border-radius:8px" placeholder='从求职app「准备投递」弹窗点「复制填表数据」，粘到这里'></textarea>
+    <div class="foot">
+      <button id="ffFill" class="primary">填充当前页</button>
+    </div>
+    <div id="ffSections"></div>
+  </div>
+  <div class="sect">
+    <h2>探测表单结构（填不上时用这个）</h2>
+    <div class="sub">有些栏填不动，是因为每家官网的组件都不一样。这个按钮<b>不改页面、不填值</b>，只把当前页每个可填控件的「标签写在哪儿、用的是什么组件、是不是只读、是不是下拉」导成一份清单。复制后发给开发者，就能针对这一页写适配，不用继续猜。<br><b>日期 / 下拉栏填不动时多一步</b>：先把它<b>点开</b>（让面板弹出来），再点这个按钮 —— 面板的结构会一起导出，那才是真正缺的那块。</div>
+    <div id="pbBanner" class="banner">停在填不动的那个表单页，点「探测本页表单」。</div>
+    <div id="pbBody"></div>
+    <div class="foot">
+      <button id="pbGo">探测本页表单</button>
+      <button id="pbCopy" class="primary" disabled>复制结构 JSON</button>
+    </div>
+  </div>
+  <div class="sect">
+    <h2>院校项目采集</h2>
+    <div class="sub">停在某个学校 PhD/MPhil 项目的详情页，点一下，抓出 program/deadline/fund/语言要求/项目介绍。复制 JSON 后回求职app「申学规划 → 导入院校项目」粘贴入库。</div>
+    <div id="pgBanner" class="banner">在项目详情页点「采集本页项目」。</div>
+    <div id="pgBody"></div>
+    <div class="foot">
+      <button id="pgGo">采集本页项目</button>
+      <button id="pgCopy" class="primary" disabled>复制项目 JSON</button>
+    </div>
+  </div>
+  <script src="extractor.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>

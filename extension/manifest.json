@@ -1,0 +1,11 @@
+{
+  "manifest_version": 3,
+  "name": "职引 · 投递状态采集",
+  "version": "0.1.0",
+  "description": "读取你已打开的投递页面上的状态文字，导出为结构化状态事件。不主动请求、不模拟登录、不后台运行。",
+  "permissions": ["activeTab", "scripting", "clipboardWrite"],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "采集当前页的投递状态"
+  }
+}

@@ -1,0 +1,38 @@
+{
+  "version": "0.1.0",
+  "note": "采集规则配置。页面改版时只改这个文件，不需要动代码。",
+
+  "stages": [
+    { "stage": "closed", "label": "已结束", "kws": ["不合适", "待定", "未通过", "已结束", "流程结束", "感谢信", "感谢您", "不予考虑", "已拒绝", "职位已关闭"] },
+    { "stage": "offer", "label": "Offer", "kws": ["offer", "录用", "意向书", "拟录用", "录用通知", "入职邀请", "offer letter"] },
+    { "stage": "hr", "label": "HR 面", "kws": ["hr面", "hr 面", "hr面试", "终面", "综合面试", "主管面", "部门经理面"] },
+    { "stage": "interview_2", "label": "二面", "kws": ["二面", "复试", "复面", "第二轮面试", "交叉面", "第二轮技术"] },
+    { "stage": "interview_1", "label": "一面", "kws": ["一面", "初试", "第一轮面试", "技术面试", "专业面试", "邀面试", "面试邀请", "待面试", "面试中", "约面"] },
+    { "stage": "written_test", "label": "笔试", "kws": ["笔试", "测评", "在线考试", "笔试邀请", "测评邀请", "ai面", "ai 面", "在线编程"] },
+    { "stage": "screening", "label": "简历筛选中", "kws": ["已查看", "简历筛选", "筛选中", "已阅", "处理中", "待处理", "评估中", "审核中"] },
+    { "stage": "submitted", "label": "已投递", "kws": ["投递成功", "已投递", "简历已收到", "申请成功", "已申请", "等待处理", "简历投递成功"] }
+  ],
+
+  "rules": [
+    {
+      "id": "example",
+      "name": "示例规则（结构仅作格式示范，选择器需按你的真实页面校准）",
+      "match": ["example-ats.com"],
+      "itemSelector": ".application-list .application-item",
+      "fields": {
+        "company": ".company-name",
+        "position": ".position-name",
+        "stageRaw": ".status-label",
+        "externalId": "[data-application-id]",
+        "occurredAt": ".update-time"
+      }
+    }
+  ],
+
+  "options": {
+    "maxItems": 50,
+    "minTextLen": 2,
+    "maxTextLen": 24,
+    "daysBack": 120
+  }
+}
