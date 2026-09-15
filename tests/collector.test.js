@@ -629,7 +629,10 @@ runCombo(comboPage, { company: '京东健康' }, null, mockAntSelect).then(funct
   /* 第二十三轮：美团式自研表单。接在异步链路上，跑完才汇总。 */
   return runMtdSuite().then(function () {
     /* 第二十四轮：注入语义。refactor 掉这条，整个扩展的功能都会静默失效。 */
-    return runInjectionSuite();
+    return runInjectionSuite().then(function () {
+    /* 第三十八轮：牛客式简历页条目错位 —— 复现场景与修复锁定 */
+    return runNowcoderReproSuite();
+  });
   });
 }).then(function () {
   finishCollect();
@@ -1040,6 +1043,104 @@ function runMtdDeafSuite() {
       el.value === '' && (r.filled || []).length === 0 && /没变成 2026-05/.test(String(m.reason)),
       JSON.stringify({ v: el.value, filled: r.filled, reason: m.reason }));
     win.close();
+  });
+}
+
+/* ---------- 10.10 牛客式简历页：条目错位复现与修复锁定（第三十八轮） ----------
+   用户实测：ICB 项目被填上深圳海关口岸门诊部的 2024.05-2025.07，ceRNA 项目被填上
+   京东健康的起止（年份还被选错成 2026/11），第 2 段工作经历公司名称空着。
+   根因：第二遍「载荷第 k 条 ↔ 全页第 k 个时间栏」不分工作 / 项目组。
+   这组用例把修复锁死：时间跟着名字走，未来时间宁可不填。 */
+function nkProjBlock(pfx) {
+  return [
+    '<div class="nk-item"><div class="nk-label">项目名称</div><input data-t="' + pfx + 'Name"></div>',
+    '<div class="nk-item"><div class="nk-label">项目角色</div><input data-t="' + pfx + 'Role"></div>',
+    '<div class="nk-item"><div class="nk-label">项目时间</div>',
+    '<div class="mtd-date-picker"><input data-t="' + pfx + 'Start" readonly placeholder="开始时间"></div>',
+    '<div class="mtd-date-picker"><input data-t="' + pfx + 'End" readonly placeholder="结束时间"></div></div>',
+    '<div class="nk-item"><div class="nk-label">项目描述</div><textarea data-t="' + pfx + 'Desc"></textarea></div>'
+  ].join('');
+}
+function nkWorkBlock(pfx) {
+  return [
+    '<div class="nk-item"><div class="nk-label">职位名称</div><input data-t="' + pfx + 'Role"></div>',
+    '<div class="nk-item"><div class="nk-label">在职时间</div>',
+    '<div class="mtd-date-picker"><input data-t="' + pfx + 'Start" readonly placeholder="开始时间"></div>',
+    '<div class="mtd-date-picker"><input data-t="' + pfx + 'End" readonly placeholder="结束时间"></div></div>',
+    '<div class="nk-item"><div class="nk-label">工作描述</div><textarea data-t="' + pfx + 'Desc"></textarea></div>'
+  ].join('');
+}
+const NK_PAGE = nkProjBlock('p0') + nkProjBlock('p1') + nkWorkBlock('w0');
+const NK_PROJECTS = [
+  { name: 'ICB 免疫疗法多组学数据库构建', role: '项目成员', time: '2026.01 - 2026.08', description: '多组学数据库整合' },
+  { name: 'ceRNA 网络分析项目', role: '项目成员', time: '2025.09 - 2026.08', description: 'ceRNA 网络构建' }
+];
+const NK_WORKS = [
+  { company: '京东健康（京东互联网医院）', role: '产品运营实习生', time: '2025.11 - 2026.01', bullets: ['竞品分析报告'] },
+  { company: '深圳海关口岸门诊部', role: '口腔科实习生', time: '2024.05 - 2025.07', bullets: ['临床诊疗支持'] }
+];
+function nkDom() {
+  const dom = new JSDOM('<!DOCTYPE html><html><head><title>在线简历</title></head><body>' + NK_PAGE + '</body></html>',
+    { url: 'https://www.nowcoder.com/profile', runScripts: 'outside-only' });
+  dom.window.eval(src);
+  mockMtdPicker(dom.window);
+  return dom.window;
+}
+function nkVals(win) {
+  const v = {};
+  win.document.querySelectorAll('[data-t]').forEach(function (el) { v[el.dataset.t] = el.value; });
+  return v;
+}
+function runNowcoderReproSuite() {
+  /* 场景 A：项目表单排在工作表单前面（用户实测的 DOM 顺序）。
+     旧代码：works[0] 京东健康抢 p0 的时间栏，works[1] 深圳海关抢 p1 的。 */
+  const winA = nkDom();
+  winA.fillFromPayload({ fields: {}, sections: { work: NK_WORKS, projects: NK_PROJECTS } });
+  return winA.fillComboFields({ fields: {}, sections: { work: NK_WORKS, projects: NK_PROJECTS } }).then(function (rA) {
+    const v = nkVals(winA);
+    ok('牛客复现：ICB 的时间是它自己的（2026-01 / 2026-08），不再被深圳海关那段抢占',
+      v.p0Start === '2026-01' && v.p0End === '2026-08',
+      JSON.stringify({ s: v.p0Start, e: v.p0End }));
+    ok('牛客复现：ceRNA 的时间是它自己的（2025-09 / 2026-08），不再被京东健康那段抢占',
+      v.p1Start === '2025-09' && v.p1End === '2026-08',
+      JSON.stringify({ s: v.p1Start, e: v.p1End }));
+    ok('牛客复现：京东健康的起止时间落在工作表单里（2025-11 / 2026-01）',
+      v.w0Start === '2025-11' && v.w0End === '2026-01',
+      JSON.stringify({ s: v.w0Start, e: v.w0End }));
+    ok('牛客复现：项目名 / 职位名第一遍就填对（内容锚点的前提）',
+      v.p0Name === 'ICB 免疫疗法多组学数据库构建' && v.w0Role === '产品运营实习生',
+      JSON.stringify({ n: v.p0Name, r: v.w0Role }));
+    ok('牛客复现：页面上没有的第 2 段工作经历（深圳海关）如实报「表单不在这页上」',
+      (rA.missed || []).some(function (m) { return /深圳海关/.test(String(m.reason)); }),
+      JSON.stringify((rA.missed || []).map(function (m) { return m.reason; })));
+    winA.close();
+
+    /* 场景 B：重跑对齐 —— 名字是上一轮按旧顺序填的（p0=ICB，p1=ceRNA），
+       这一轮载荷把两条项目换了个顺序。锚点必须把时间跟名字对上。 */
+    const winB = nkDom();
+    winB.fillFromPayload({ fields: {}, sections: { projects: [NK_PROJECTS[0], NK_PROJECTS[1]] } });
+    return winB.fillComboFields({ fields: {}, sections: { projects: [NK_PROJECTS[1], NK_PROJECTS[0]] } }).then(function () {
+      const v2 = nkVals(winB);
+      ok('牛客复现：载荷顺序变了，时间仍跟着项目名走（p0 依然是 ICB 的 2026-01）',
+        v2.p0Start === '2026-01' && v2.p1Start === '2025-09',
+        JSON.stringify({ p0: v2.p0Start, p1: v2.p1Start }));
+      winB.close();
+
+      /* 场景 C：未来时间防呆 —— 开始时间 2027.01（现在是 2026 下半年）不代填，如实报告。 */
+      const winC = nkDom();
+      return winC.fillComboFields({ fields: {}, sections: { work: [{ company: '某公司', role: '实习生', time: '2027.01 - 至今', bullets: [] }] } }).then(function (rC) {
+        const v3 = nkVals(winC);
+        ok('未来时间防呆：开始时间在未来 → 不代填',
+          v3.w0Start === '', JSON.stringify(v3.w0Start));
+        ok('未来时间防呆：missed 里写清原因（含「未来」与当前时间）',
+          (rC.missed || []).some(function (m) { return /未来/.test(String(m.reason)); }),
+          JSON.stringify((rC.missed || []).map(function (m) { return m.reason; })));
+        ok('未来时间防呆：「至今」的结束时间照旧提醒手动勾',
+          (rC.notice || []).some(function (n) { return /至今/.test(String(n)); }),
+          JSON.stringify(rC.notice));
+        winC.close();
+      });
+    });
   });
 }
 

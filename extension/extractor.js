@@ -1270,7 +1270,14 @@ function fillFromPayload(opts) {
     for (var i = 0; i < scan.length; i++) { var x = scan[i]; if (avail(x) && pred(x)) { x.taken = true; return x; } }
     return null;
   }
-  function pickBlock(k, pats) {
+  /* 第三十八轮：同组优先。实测（牛客式简历页）：只按「第 k 个」匹配时，
+     工作段的时间栏会被项目段抢走。优先在同组（sect）里找；整组找不到
+     再退回全局 —— 老页面 sect 可能为空，不能一刀切。 */
+  function pickBlock(k, pats, sect) {
+    if (sect) {
+      var hit = pick(function (x) { return x.block === k && x.sect === sect && !!labelMatch(x, pats); });
+      if (hit) return hit;
+    }
     return pick(function (x) { return x.block === k && !!labelMatch(x, pats); });
   }
   /* 页面上有没有"第一遍本来就管不了"的栏（只读日期框 / 带组件外壳的下拉）？
@@ -1341,7 +1348,7 @@ function fillFromPayload(opts) {
     pairs.forEach(function (p) {
       if (p.v == null || clean(p.v) === '') return;
       var nm = nameOf(p.c === 'timeStart' ? 'gradEnd' : (p.c === 'timeEnd' ? 'gradYear' : p.c), k);
-      var hit = pickBlock(k, p.pats);
+      var hit = pickBlock(k, p.pats, 'edu');
       if (hit) { plan.push({ x: hit, value: String(p.v), field: nm }); if (k === 0) usedFlat[nm] = 1; }
       else if (!deferrable(p.pats, k)) missed.push(nm);
     });
@@ -1366,7 +1373,7 @@ function fillFromPayload(opts) {
     pairs.forEach(function (p) {
       if (p.v == null || clean(p.v) === '') return;
       var nm = nameOf(p.c, k);
-      var hit = pickBlock(k, p.pats);
+      var hit = pickBlock(k, p.pats, 'work');
       /* 第 1 段的描述栏被本岗文案占了 —— 那不是"没填上"，是换了版本，别重复报 */
       var taken = customUsed && k === 0 && (p.c === 'workDesc' || p.c === 'projDesc');
       if (hit) { plan.push({ x: hit, value: String(p.v), field: nm }); if (k === 0) usedFlat[nm] = 1; }
@@ -1391,7 +1398,7 @@ function fillFromPayload(opts) {
     pairs.forEach(function (q) {
       if (q.v == null || clean(q.v) === '') return;
       var nm = nameOf(q.c, k);
-      var hit = pickBlock(k, q.pats);
+      var hit = pickBlock(k, q.pats, 'proj');
       var taken = customUsed && k === 0 && (q.c === 'projDesc' || q.c === 'workDesc');
       if (hit) { plan.push({ x: hit, value: String(q.v), field: nm }); if (k === 0) usedFlat[nm] = 1; }
       else if (!taken && !deferrable(q.pats, k)) missed.push(nm);
@@ -1528,32 +1535,149 @@ function fillComboFields(opts) {
   want('gradYear', [/毕业(时间|年份|年月|日期)/, /graduation/i], fields.gradYear, true);
   want('gradEnd', [/入学|就读(开始|起止)/], fields.gradEnd, true);
 
-  /* 分段起止时间：第 k 段数据 → 页面上第 k 段（同名栏第 k 次出现）。
-     美团那页有 2 段教育 / 2 段工作 / 2 段项目，每段都有「起止时间」，
-     只有顺序能区分哪一对属于哪一段。 */
+  /* ---------- 分段起止时间：先按内容对齐，再按组内顺序兜底（第三十八轮重写） ----------
+     实测踩坑（牛客式简历页）：旧口径「载荷第 k 条 ↔ 全页第 k 个开始时间」不分工作 / 项目组 ——
+     项目表单排在 DOM 前面时，工作经历的起止时间会抢进项目表单
+     （用户实测：ICB 项目被填上深圳海关口岸门诊部的 2024.05-2025.07，ceRNA 被填上京东健康的）。
+     现在的做法：
+       ① 同组输入框按「段块」聚起来；
+       ② 读每块名称栏（项目名称 / 公司·职位 / 院校）的现值 —— 第一遍已把名字填进去 ——
+          和载荷各条算相似度，**名字对上的才用那条的时间**；
+       ③ 配不上的块：载荷里恰好只剩一条就用它（一次填一个弹窗的形态）；
+          否则组内顺序兜底。载荷多出来的条目如实报「页面上没有这一段的表单」。 */
   var edu = (sec && sec.education) || [];
   var works = (sec && sec.work) || [];
   var projs = (sec && sec.projects) || [];
-  function wantRange(list, tag, k) {
-    var it = list[k];
-    if (!it || !it.time) return;
-    var r = timeRange(it.time);
-    if (r[0]) {
-      var h = pick(function (x) { return x.block === k && !!labelMatch(x, PAT_START); });
-      if (h) jobs.push({ x: h, field: tag + 'Start', value: r[0], date: true });
-      else results.missed.push({ field: tag + 'Start', value: r[0], reason: '页面上没有对应的开始时间栏' });
+  function nameScore(a, b) {
+    a = clean(a).replace(/\s/g, '');
+    b = clean(b).replace(/\s/g, '');
+    if (!a || !b) return 0;
+    if (a === b) return 3;
+    if (a.indexOf(b) >= 0 || b.indexOf(a) >= 0) return 2;
+    var best = 0;
+    for (var i = 0; i < a.length; i++) {
+      for (var j = 0; j < b.length; j++) {
+        var n = 0;
+        while (i + n < a.length && j + n < b.length && a.charAt(i + n) === b.charAt(j + n)) n++;
+        if (n > best) best = n;
+      }
     }
-    if (r[1] && !isPresentWord(r[1])) {
-      var h2 = pick(function (x) { return x.block === k && !!labelMatch(x, PAT_END); });
-      if (h2) jobs.push({ x: h2, field: tag + 'End', value: r[1], date: true });
-      else results.missed.push({ field: tag + 'End', value: r[1], reason: '页面上没有对应的结束时间栏' });
-    } else if (isPresentWord(r[1])) {
-      results.notice.push('「' + clean(r[1]) + '」的结束时间不填 —— 这类表要在旁边勾「至今」，请手动勾一下');
-    }
+    return best >= 4 ? 1 : 0;
   }
-  edu.forEach(function (e, k) { wantRange(edu, 'education', k); });
-  works.forEach(function (w, k) { wantRange(works, 'work', k); });
-  projs.forEach(function (p, k) { wantRange(projs, 'project', k); });
+  function groupBlocks(sect) {
+    var map = {}, order = [];
+    scan.forEach(function (x) {
+      if (x.sect !== sect) return;
+      var k = String(x.block);
+      if (!map[k]) { map[k] = { block: x.block, inputs: [] }; order.push(k); }
+      map[k].inputs.push(x);
+    });
+    return order.map(function (k) { return map[k]; });
+  }
+  /* 块的身份值：名称类栏的现值（普通输入框读 value；检索下拉读外壳文本） */
+  function blockAnchor(b, pats) {
+    for (var i = 0; i < b.inputs.length; i++) {
+      var x = b.inputs[i];
+      if (!labelMatch(x, pats)) continue;
+      var v = clean(x.el.value);
+      if (!v && x.wrap) {
+        var sp = null;
+        try { sp = x.wrap.querySelector('[class*="selected"],[class*="value"]'); } catch (e) { sp = null; }
+        v = clean((sp && sp.textContent) || '');
+        if (/请选择|请输入/.test(v)) v = '';
+      }
+      if (v) return v;
+    }
+    return '';
+  }
+  function pickIn(b, pats) {
+    for (var i = 0; i < b.inputs.length; i++) {
+      var x = b.inputs[i];
+      if (avail(x) && !x.taken && labelMatch(x, pats)) {
+        x.taken = true; results.handled.push(x.el); return x;
+      }
+    }
+    return null;
+  }
+  /* 贪心配对：分数高的先配，一条 / 一块最多配一次 */
+  function pairByAnchor(list, blocks, nameOfIt) {
+    var assign = [], usedE = {}, usedB = {}, cands = [];
+    blocks.forEach(function (b, bi) {
+      if (!b.anchor) return;
+      list.forEach(function (it, ei) {
+        var s = nameScore(b.anchor, nameOfIt(it, ei));
+        if (s >= 2) cands.push({ bi: bi, ei: ei, s: s });
+      });
+    });
+    cands.sort(function (x, y) { return y.s - x.s; });
+    cands.forEach(function (c) {
+      if (usedB[c.bi] || usedE[c.ei]) return;
+      usedB[c.bi] = 1; usedE[c.ei] = 1; assign[c.bi] = c.ei;
+    });
+    var rest = [];
+    list.forEach(function (it, ei) { if (!usedE[ei]) rest.push(ei); });
+    blocks.forEach(function (b, bi) {
+      if (assign[bi] !== undefined) return;
+      assign[bi] = rest.length ? rest.shift() : -1;
+    });
+    return assign;
+  }
+  function wantRangesFor(list, tag, sect, anchorPats, nameOfIt, comboPats) {
+    var blocks = groupBlocks(sect);
+    if (!blocks.length) blocks = groupBlocks('');   /* 无标签可继承的裸页面：退回旧行为 */
+    if (!blocks.length) {
+      list.forEach(function (it) {
+        var r = timeRange(it.time);
+        if (r[0]) results.missed.push({ field: tag + 'Start', value: r[0], reason: '页面上没有这一组的表单' });
+      });
+      return;
+    }
+    blocks.forEach(function (b) { b.anchor = blockAnchor(b, anchorPats); });   /* 读块内名称栏现值作身份 */
+    var assign = pairByAnchor(list, blocks, nameOfIt);
+    blocks.forEach(function (b, bi) {
+      var ei = assign[bi];
+      if (ei == null || ei < 0 || !list[ei]) return;
+      var it = list[ei];
+      var label = nameOfIt(it, ei) || ('第' + (ei + 1) + '条');
+      var r = timeRange(it.time);
+      if (r[0]) {
+        var s = pickIn(b, PAT_START);
+        if (s) jobs.push({ x: s, field: tag + 'Start', value: r[0], date: true });
+        else results.missed.push({ field: tag + 'Start', value: r[0], reason: '「' + label + '」这一段没找到开始时间栏' });
+      }
+      if (r[1] && !isPresentWord(r[1])) {
+        var e = pickIn(b, PAT_END);
+        if (e) jobs.push({ x: e, field: tag + 'End', value: r[1], date: true });
+        else results.missed.push({ field: tag + 'End', value: r[1], reason: '「' + label + '」这一段没找到结束时间栏' });
+      } else if (isPresentWord(r[1])) {
+        results.notice.push('「' + clean(r[1]) + '」的结束时间不填 —— 这类表要在旁边勾「至今」，请手动勾一下');
+      }
+      /* 公司 / 职位检索栏逐块安排：旧口径只安排第一个公司栏，第 2 段起从来没人填
+         （用户实测：第 2 段工作经历的公司名称空着）。 */
+      if (comboPats) {
+        comboPats.forEach(function (cp) {
+          var v = it[cp.key];
+          if (v == null || clean(v) === '') return;
+          var h = pickIn(b, cp.pats);
+          if (h) jobs.push({ x: h, field: cp.key, value: String(v), date: false });
+        });
+      }
+    });
+    /* 载荷里多出来的条目：页面上没有它的表单块，如实报告 */
+    list.forEach(function (it, ei) {
+      if (assign.indexOf(ei) >= 0) return;
+      var r = timeRange(it.time);
+      if (r[0]) results.missed.push({ field: tag + 'Start', value: r[0], reason: '「' + (nameOfIt(it, ei) || '第' + (ei + 1) + '条') + '」的表单不在这页上（分步 / 分弹窗填写时，请打开对应表单再点一次）' });
+    });
+  }
+  wantRangesFor(edu, 'education', 'edu', [/院校/, /学校/, /university/i, /school/i],
+    function (e) { return e.school || ''; }, null);
+  wantRangesFor(works, 'work', 'work', [/公司/, /单位/, /company/i, /职位/, /岗位/],
+    function (w) { return ((w.company || '') + ' ' + (w.role || '')).trim(); },
+    [{ key: 'company', pats: [/公司/, /单位/, /employer/i] }, { key: 'role', pats: [/职位名称/, /岗位名称/, /职务/, /^职位$/, /^岗位$/] }]);
+  wantRangesFor(projs, 'project', 'proj', [/项目名称/, /项目名/],
+    function (p) { return p.name || ''; },
+    [{ key: 'role', pats: [/项目角色/, /角色/] }]);
 
   /* 派发事件：受控组件靠 input 触发检索 / 认值；click 要靠完整的指针序列 */
   function fire(el, type, Ctor, extra) {
@@ -1983,6 +2107,22 @@ function fillComboFields(opts) {
     var x = job.x, inner = x.el, wrap = x.wrap;
     var isDate = job.date || !!(wrap && /picker|date|calendar/i.test(String(wrap.className || '')));
     var next = function () { return runJob(idx + 1); };
+    /* 未来时间防呆（第三十八轮）：开始时间落在未来，多半是段块对错了或这条经历
+       的时间本身有误（实测填出过 2026/11）。宁可跳过并说明，也不填一个错的。 */
+    if (isDate && /Start$/.test(String(job.field))) {
+      var ymG = ymOf(job.value);
+      if (ymG) {
+        var nw = new Date();
+        var gy = parseInt(ymG.y, 10), gm = parseInt(ymG.m || '12', 10);
+        if (gy > nw.getFullYear() || (gy === nw.getFullYear() && gm > nw.getMonth() + 2)) {
+          results.missed.push({
+            field: job.field, value: job.value,
+            reason: '开始时间在未来（现在是 ' + nw.getFullYear() + '-' + (nw.getMonth() + 1) + '），多半是条目对错了或这条经历的时间本身有误 —— 没有代填，请核对后手动填'
+          });
+          return next();
+        }
+      }
+    }
 
     /* A 原生 select：选项对得上才动 */
     if (inner.tagName === 'SELECT') {
