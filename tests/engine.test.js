@@ -724,6 +724,22 @@ ok('百分制 85：gpaRaw 纯数值 + gpaScale=100 + 折算 ≈ 3.7',
   JSON.stringify([pct35.profile.gpaRaw, pct35.profile.gpaScale, pct35.profile.gpa]));
 ok('filters 默认值带上 jobQ 与 prefOpen（老存档由 mergeState 兜底补齐）',
   (function () { const df = defaultFilters(); return df.jobQ === '' && !!df.prefOpen && df.prefOpen.city === false; })());
+/* ============ 第三十六轮：GPA 老档回填 + 申学折叠状态位 ============ */
+ok('老档只存 gpa（4 分制数值）时回填 gpaRaw/gpaScale，成绩框不再空白',
+  (function () {
+    const m = mergeState({ profile: { gpa: 3.6 } }).profile;
+    return m.gpaRaw === '3.6' && m.gpaScale === 4 && m.gpa === 3.6;
+  })());
+ok('新档清空成绩（gpaRaw 空、gpa null）不会被回填出假数据',
+  (function () {
+    const m = mergeState({ profile: { gpaRaw: '', gpa: null } }).profile;
+    return m.gpaRaw === '' && m.gpa === null;
+  })());
+ok('studyPref 默认带 prefOpen（申学偏好折叠状态有地方记）',
+  (function () {
+    const sp = mergeState({}).studyPref;
+    return !!sp.prefOpen && sp.prefOpen.region === false && sp.prefOpen.field === false;
+  })());
 
 out.push('');
 out.push('=== 结果 ===');

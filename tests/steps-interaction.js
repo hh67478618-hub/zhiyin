@@ -1580,6 +1580,37 @@ module.exports = function (ctx) {
     if (!q('#cityBlk').hidden) throw new Error('再次点击未收起');
   });
 
+  /* ============ 第三十六轮：申学折叠同款 + GPA 输入框修复 ============ */
+  step('36 轮：申学偏好与求职同款折叠（默认收起、展开持久化、重画不丢）', function () {
+    win.switchView('study');
+    if (qa('#studyPref .cat-fold').length !== 2) throw new Error('应为 2 个折叠组：' + qa('#studyPref .cat-fold').length);
+    if (qa('#studyPref .cat-fold-b:not([hidden])').length) throw new Error('默认应全部收起');
+    const labels = qa('#studyPref .cat-fold-t').map(function (x) { return x.textContent; }).join('/');
+    if (labels.indexOf('目标国家 / 地区') < 0 || labels.indexOf('专业细分方向') < 0) throw new Error('折叠标题不对：' + labels);
+    const h = q('#studyPref [data-fold-t="region"]');
+    click(h);
+    if (q('#regionBlk').hidden) throw new Error('点击后未展开');
+    const st36 = JSON.parse(win.localStorage.getItem('zhiyin_state_v1'));
+    if (!st36.studyPref.prefOpen || st36.studyPref.prefOpen.region !== true) throw new Error('展开状态未持久化到 studyPref.prefOpen');
+    win.renderStudy();
+    if (q('#regionBlk').hidden) throw new Error('重画后折叠状态丢了');
+    click(q('#studyPref [data-fold-t="region"]'));
+    if (!q('#regionBlk').hidden) throw new Error('再次点击未收起');
+  });
+
+  step('36 轮：GPA 分制下拉定宽，成绩输入框与老档回填俱在', function () {
+    win.switchView('resume');
+    const sel = q('#profileForm [data-ksel="gpaScale"]');
+    if (!sel) throw new Error('缺分制选择器');
+    if ((sel.getAttribute('style') || '').indexOf('112px') < 0) throw new Error('分制下拉未定宽：' + sel.getAttribute('style'));
+    if (!q('#profileForm [data-k="gpaRaw"]')) throw new Error('成绩输入框不见了');
+    /* 老档回填：只有 gpa 没有 gpaRaw 的存档，mergeState 后成绩框应有值（4 分制原值） */
+    const cur = JSON.parse(win.localStorage.getItem('zhiyin_state_v1'));
+    const backfilled = win.mergeState({ profile: { gpa: 3.6 } }).profile;
+    if (backfilled.gpaRaw !== '3.6' || backfilled.gpaScale !== 4) throw new Error('老档 gpa 未回填');
+    win.load();
+  });
+
   step('35 轮：关键词搜索即输即筛，焦点不丢，清空恢复', function () {
     /* 列表有分页（每页至多 10 条），按条数断言不稳 —— 用页头「共 N 个岗位」的总数 */
     const total = () => {

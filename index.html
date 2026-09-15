@@ -1622,6 +1622,8 @@ function defaultState() {
     vdate: dateStr(new Date()),
     studyPref: {
       regions: [], fields: [], customRegions: [], customFields: [],
+      /* 第三十六轮：申学偏好折叠的展开状态（与求职 filters.prefOpen 同一套路）。 */
+      prefOpen: { region: false, field: false },
       weights: { 硬性条件: 55, 研究方向: 25, 地区偏好: 10, 科研产出: 10 }
     },
     jobPref: {
@@ -1679,6 +1681,13 @@ function mergeState(o) {
   const base = defaultState();
   const s = Object.assign(base, o);
   s.profile = Object.assign(emptyProfile(), o.profile || {});
+  /* 第三十六轮：三十五轮前 GPA 只存折算后的 4 分制数值（profile.gpa），没有 gpaRaw/gpaScale。
+     不回填的话，老用户打开表单「成绩」框是空的，会以为数据丢了。gpa 本来就是 4 分制口径，
+     按原值回填、分制记 4，不做二次折算；新档清空成绩（gpa null）不会误触发。 */
+  if ((s.profile.gpaRaw === '' || s.profile.gpaRaw == null) && typeof s.profile.gpa === 'number' && isFinite(s.profile.gpa)) {
+    s.profile.gpaRaw = String(s.profile.gpa);
+    s.profile.gpaScale = 4;
+  }
   s.studyPref = Object.assign(base.studyPref, o.studyPref || {});
   s.jobPref = Object.assign(base.jobPref, o.jobPref || {});
   /* filters 是历史上唯一漏了兜底的一块：老存档里缺的键、以及语义变过的键，都在这里补齐 */
@@ -2640,7 +2649,7 @@ function renderProfileForm() {
   html.push('<div class="' + cls('gpa') + '"><label>GPA（成绩 + 分制） ' + flag('gpa') + '</label>' +
     '<div style="display:flex;gap:8px;align-items:center">' +
     '<input data-k="gpaRaw" value="' + esc(p.gpaRaw) + '" placeholder="如：3.6 或 85" style="flex:1;min-width:0">' +
-    '<select data-ksel="gpaScale" title="你的学校用的计分制">' +
+    '<select data-ksel="gpaScale" title="你的学校用的计分制" style="flex:0 0 112px;width:112px">' +
     [4, 4.5, 5, 100].map(function (sc) { return '<option value="' + sc + '"' + ((+p.gpaScale || 4) === sc ? ' selected' : '') + '>' + (sc === 100 ? '百分制' : sc + ' 分制') + '</option>'; }).join('') +
     '</select></div>' +
     '<div class="hint" id="gpaScaleHint" style="margin-top:4px">' + gpaScaleHint(p) + '</div></div>');
@@ -2840,11 +2849,10 @@ function renderStudyPref() {
   html.push('<div class="card-h"><div><h3>申学偏好</h3><div class="desc">每一类都可以自己输入标签；「一个都不选」等于在全部范围内按匹配度检索' +
     (importedCount ? '　<span class="tag accent">已采集 ' + importedCount + ' 个项目</span>' : '') + '</div></div>' +
     '<div class="row"><button class="btn sm" id="importProgramsBtn">导入院校项目</button></div></div>');
-  html.push('<div class="hint" style="margin-bottom:2px">目标国家 / 地区</div>');
-  html.push('<div id="regionBlk">' + catBlockHtml(regionCfg) + '</div>');
+  /* 第三十六轮：与求职偏好同款折叠 —— 摘要一行 + 展开，展开状态记在 studyPref.prefOpen。 */
+  html.push(catFoldHtml('region', '目标国家 / 地区', prefs.regions, 'regionBlk', catBlockHtml(regionCfg), state.studyPref));
   html.push('<div class="divider"></div>');
-  html.push('<div class="hint" style="margin-bottom:2px">专业细分方向</div>');
-  html.push('<div id="fieldBlk">' + catBlockHtml(fieldCfg) + '</div>');
+  html.push(catFoldHtml('field', '专业细分方向', prefs.fields, 'fieldBlk', catBlockHtml(fieldCfg), state.studyPref));
   html.push('<div class="divider"></div>');
   html.push('<div class="hint" style="margin-bottom:11px">匹配权重微调（总和不必为 100，系统按比例计算）</div>');
   html.push('<div class="wgrid">');
@@ -2858,6 +2866,20 @@ function renderStudyPref() {
 
   bindCat(regionCfg, renderStudy);
   bindCat(fieldCfg, renderStudy);
+  /* 第三十六轮：折叠头与求职同款 —— 只翻 DOM 状态，不整卡重画；展开状态持久化。 */
+  $$('#studyPref [data-fold-t]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      const key = b.getAttribute('data-fold-t');
+      state.studyPref.prefOpen = state.studyPref.prefOpen || {};
+      state.studyPref.prefOpen[key] = !state.studyPref.prefOpen[key];
+      const body = b.parentNode.querySelector('.cat-fold-b');
+      if (body) body.hidden = !state.studyPref.prefOpen[key];
+      const a = b.querySelector('.cat-fold-a');
+      if (a) a.textContent = state.studyPref.prefOpen[key] ? '▴ 收起' : '▾ 展开';
+      b.setAttribute('aria-expanded', state.studyPref.prefOpen[key] ? 'true' : 'false');
+      save();
+    });
+  });
   const ipb = $('#importProgramsBtn');
   if (ipb) ipb.addEventListener('click', openImportPrograms);
   $$('#studyPref input[data-sw]').forEach(r => r.addEventListener('input', function () {
@@ -3617,8 +3639,9 @@ function doAdapt(jd, strength, activeJobId) {
 
 /* 第三十五轮：偏好区折叠。三类标签逐组展开太占屏（整卡近三屏高），
    收成一行摘要 + 展开；展开状态记在 filters.prefOpen 里，重画后不丢。 */
-function catFoldHtml(key, label, selected, bodyId, bodyHtml) {
-  const open = state.filters.prefOpen && state.filters.prefOpen[key];
+function catFoldHtml(key, label, selected, bodyId, bodyHtml, store) {
+  const foldStore = store || state.filters;
+  const open = foldStore.prefOpen && foldStore.prefOpen[key];
   const sum = selected.length ? selected.join('、') : '不限';
   return '<div class="cat-fold">' +
     '<button type="button" class="cat-fold-h" data-fold-t="' + key + '" aria-expanded="' + (open ? 'true' : 'false') + '">' +
