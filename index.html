@@ -86,8 +86,8 @@ p{margin:0}
 .brand-sub{font-size:11.5px;color:var(--ink3);letter-spacing:.4px;margin-top:1px}
 .nav{display:flex;flex-direction:column;gap:7px;margin-top:6px;overflow-y:auto;overflow-x:hidden;min-height:0;padding:2px 3px 4px}
 .nav-item{
-  display:flex;flex-direction:column;gap:6px;width:100%;text-align:left;position:relative;
-  padding:8px 8px 9px;border-radius:15px;color:var(--ink2);
+  display:flex;flex-direction:row;align-items:center;gap:11px;width:100%;text-align:left;position:relative;
+  padding:10px 12px;border-radius:15px;color:var(--ink2);
   background:linear-gradient(180deg,rgba(255,255,255,.95),rgba(255,255,255,.72));
   border:1px solid transparent;
   box-shadow:0 1px 2px rgba(64,52,28,.05),inset 0 1px 0 #fff;
@@ -108,38 +108,28 @@ p{margin:0}
   content:"";position:absolute;left:-9px;top:15px;bottom:15px;width:3px;border-radius:3px;
   background:var(--grad-brand);box-shadow:0 4px 12px rgba(79,70,229,.4);
 }
-.nv-fig{
-  display:block;position:relative;width:100%;height:56px;border-radius:11px;overflow:hidden;
-  background:linear-gradient(160deg,#FFFEFB 0%,var(--surface-2) 100%);
-  box-shadow:inset 0 0 0 1px var(--line2);
+/* 「第三十九轮」侧栏导航去弯路插画：改为图标块 + 文字横排，四个模块不再左右甩 */
+.nv-ic{
+  flex:0 0 auto;width:38px;height:38px;border-radius:11px;display:flex;align-items:center;justify-content:center;
+  background:var(--surface-2);box-shadow:inset 0 0 0 1px var(--line2);
   transition:background .3s,box-shadow .3s;
 }
-.nv-fig svg{display:block;width:100%;height:100%;opacity:.55;transition:opacity .3s ease,transform .5s cubic-bezier(.22,.9,.3,1)}
-.nav-item:hover .nv-fig svg{opacity:1;transform:scale(1.05)}
-.nav-item.active .nv-fig svg{opacity:1}
-.nav-item.active .nv-fig{background:linear-gradient(160deg,#fff 0%,var(--brand-soft) 100%);box-shadow:inset 0 0 0 1px var(--brand-line)}
-.nv-road{fill:none;stroke:var(--line-strong);stroke-width:6;stroke-linecap:round;transition:stroke .3s}
-.nv-lm{fill:#fff;stroke:var(--line-strong);stroke-width:2;transition:stroke .3s,fill .3s}
-.nv-ln{fill:none;stroke:var(--line-strong);stroke-width:2;stroke-linecap:round;stroke-linejoin:round;transition:stroke .3s}
-.nv-needle{fill:var(--ink4);transition:fill .3s}
-.nv-dot{fill:var(--line);transition:fill .3s}
-.nav-item:hover .nv-road,.nav-item.active .nv-road{stroke:var(--brand-line)}
-.nav-item:hover .nv-lm,.nav-item.active .nv-lm{stroke:var(--brand)}
-.nav-item:hover .nv-ln,.nav-item.active .nv-ln{stroke:var(--brand)}
-.nav-item:hover .nv-needle,.nav-item.active .nv-needle{fill:var(--brand)}
-.nav-item:hover .nv-dot,.nav-item.active .nv-dot{fill:var(--brand-line)}
-.nav-item.active .nv-road{stroke:var(--brand)}
-.nv-tx{display:flex;flex-direction:column;gap:1px;padding:0 3px}
+.nv-ic svg{display:block;width:19px;height:19px;stroke:var(--ink3);fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;transition:stroke .3s}
+.nav-item:hover .nv-ic{background:var(--brand-soft);box-shadow:inset 0 0 0 1px var(--brand-line)}
+.nav-item:hover .nv-ic svg{stroke:var(--brand)}
+.nav-item.active .nv-ic{background:var(--brand-soft);box-shadow:inset 0 0 0 1px var(--brand-line)}
+.nav-item.active .nv-ic svg{stroke:var(--brand-deep)}
+.nv-tx{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px;padding:0 26px 0 3px}
 .nv-t{font-size:13.5px;font-weight:600;color:var(--ink);letter-spacing:.1px}
 .nav-item.active .nv-t{color:var(--brand-deep)}
 .nv-d{font-size:11px;color:var(--ink3);line-height:1.45}
 .nv-go{
-  position:absolute;right:10px;top:10px;width:19px;height:19px;border-radius:999px;
+  position:absolute;right:10px;top:50%;width:19px;height:19px;border-radius:999px;
   display:flex;align-items:center;justify-content:center;font-size:11px;line-height:1;
-  background:var(--brand);color:#fff;opacity:0;transform:translateX(-6px);
+  background:var(--brand);color:#fff;opacity:0;transform:translate(6px,-50%);
   transition:opacity .26s,transform .26s;box-shadow:var(--shadow-brand);
 }
-.nav-item:hover .nv-go{opacity:1;transform:translateX(0)}
+.nav-item:hover .nv-go{opacity:1;transform:translate(0,-50%)}
 .side-foot{margin-top:auto;border-top:1px solid var(--line);padding-top:14px;display:flex;flex-direction:column;gap:10px}
 .profile-chip{
   background:linear-gradient(135deg,var(--surface-2),#fff);border:1px solid var(--line);
@@ -485,6 +475,9 @@ input[type=range]{width:100%;accent-color:var(--brand);height:20px}
   .side{width:100%;flex:none;height:auto;position:static;border-right:none;border-bottom:1px solid var(--line);padding:14px;backdrop-filter:none;-webkit-backdrop-filter:none;background:var(--card)}
   .nav{flex-direction:row;overflow:auto;gap:5px}
   .nav-item{width:auto;white-space:nowrap;padding:7px 10px;font-size:13px;gap:8px}
+  .nv-tx .nv-d{display:none}
+  .nv-ic{width:26px;height:26px;border-radius:8px}
+  .nv-ic svg{width:15px;height:15px}
   .nav-ico{width:20px;height:20px;flex:0 0 20px;font-size:10.5px;border-radius:6px}
   .nav-item.active::before{display:none}
   .side-foot{display:none}
@@ -686,14 +679,7 @@ button,.btn,.chip,.tab,.nav-item,.segmented button,.icon-btn,.tag-x,.clickable,a
 .drop:hover{border-color:var(--brand-line);background:linear-gradient(180deg,#fff,var(--brand-soft))}
 .tag{border-radius:8px}
 
-/* 5) 导航插画：路面加白色虚线中线 —— 一眼看出是「路」，而不是一根管子；
-      静止态不再灰掉整张图，只压低一点对比，悬停/激活才上色 */
-.nv-road{stroke-width:6.5}
-.nv-dash{fill:none;stroke:#fff;stroke-width:1.7;stroke-dasharray:4 8;stroke-linecap:round;opacity:.8;transition:opacity .3s}
-.nav-item:hover .nv-dash,.nav-item.active .nv-dash{opacity:1}
-.nv-fig{background:linear-gradient(160deg,#FFFEFB 0%,#FBF7EE 100%);box-shadow:none}
-.nv-fig svg{opacity:.72}
-.nav-item:hover .nv-fig,.nav-item.active .nv-fig{box-shadow:inset 0 0 0 1px var(--brand-line)}
+/* 「第三十九轮」弯路插画已移除，针对旧插画的覆盖规则一并清掉 */
     /* ---------- 第二十七轮：编辑经历弹窗里的成就清单 ---------- */
   .inv-kids-h{margin:18px 0 10px;font-size:13px;font-weight:600;color:var(--ink);display:flex;align-items:center;gap:8px}
   .inv-kid{padding:11px 13px;background:var(--surface-2);border:1px solid var(--line2);border-radius:var(--radius-s);margin-bottom:9px}
@@ -799,12 +785,19 @@ button,.btn,.chip,.tab,.nav-item,.segmented button,.icon-btn,.tag-x,.clickable,a
 /* 「第三十四轮」申学视图锚点子导航：页面长，一排小胶囊直接跳到对应卡片 */
 /* 第三十五轮：申学导航从一排小胶囊升成六张大模块卡 —— 让人一眼看清这个功能区的构成。
    hover 有底色（浅紫），文字保持深色，不靠源码顺序定对比度。 */
+/* 第三十九轮：申学导航落定「图标卡片」版（用户选 B）—— 每卡一枚彩色图标块 + 名称 + 一句说明，悬停浮出箭头 */
 .page-nav{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:2px 0 18px}
-.page-nav .pn-c{display:flex;flex-direction:column;gap:3px;text-align:left;border:1px solid var(--line);background:var(--card);border-radius:var(--radius-m);padding:13px 14px;cursor:pointer;transition:.18s;position:relative;font:inherit}
+.page-nav .pn-c{display:flex;align-items:center;gap:10px;text-align:left;border:1px solid var(--line);background:var(--card);border-radius:var(--radius-m);padding:12px 13px;cursor:pointer;transition:.18s;position:relative;font:inherit}
 .page-nav .pn-c:hover{border-color:var(--brand-line);background:var(--brand-soft);box-shadow:var(--shadow-xs)}
-.page-nav .pn-c .pn-t{font-size:14px;font-weight:700;color:var(--ink)}
-.page-nav .pn-c .pn-d{font-size:12px;color:var(--ink3);line-height:1.5;padding-right:14px}
-.page-nav .pn-c .pn-go{position:absolute;right:12px;top:12px;color:var(--brand);font-weight:700}
+.page-nav .pn-c.on{border-color:var(--brand-line);background:var(--brand-soft)}
+.page-nav .pn-ic{flex:0 0 auto;width:32px;height:32px;border-radius:9px;display:flex;align-items:center;justify-content:center}
+.page-nav .pn-ic svg{display:block;width:16px;height:16px;fill:none;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+.page-nav .pn-mid{flex:1;min-width:0;display:flex;flex-direction:column}
+.page-nav .pn-c .pn-t{font-size:13.5px;font-weight:700;color:var(--ink)}
+.page-nav .pn-c:hover .pn-t,.page-nav .pn-c.on .pn-t{color:var(--brand-deep)}
+.page-nav .pn-c .pn-d{font-size:12px;color:var(--ink3);line-height:1.5;margin-top:2px}
+.page-nav .pn-c .pn-go{position:absolute;right:11px;top:50%;transform:translateY(-50%);color:var(--brand);font-weight:700;opacity:0;transition:opacity .18s}
+.page-nav .pn-c:hover .pn-go,.page-nav .pn-c.on .pn-go{opacity:1}
 /* 「第三十四轮」新手引导条：四步走完「导入 → 核对 → 归纳 → 规划」 */
 .guide-strip{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:0 0 16px}
 .guide-step{display:flex;gap:9px;align-items:flex-start;background:var(--card);border:1px solid var(--line2);border-radius:var(--radius-m);padding:10px 12px;cursor:pointer}
@@ -823,17 +816,14 @@ button,.btn,.chip,.tab,.nav-item,.segmented button,.icon-btn,.tag-x,.clickable,a
 .ps-sug button{display:block;width:100%;text-align:left;padding:8px 12px;border:0;background:none;font:inherit;font-size:13.5px;color:var(--ink2);cursor:pointer}
 .ps-sug button:hover{background:var(--brand-soft);color:var(--brand-deep)}
 .ps-sug .sug-empty{padding:8px 12px;font-size:12.5px;color:var(--ink3)}
-/* 「第三十四轮」简历视图重排：右列画像高、左列两卡矮，原来第 3 张卡孤零零落在左下、右侧一大片空白；
-   现在画像卡纵跨两行，左列顺序放「导入」与「经历与成就」，两列高度对齐，不再留大洞 */
-#view-resume .grid-2 > .card:nth-child(1){grid-column:1}
-#view-resume .grid-2 > .card:nth-child(2){grid-column:2;grid-row:1 / span 2}
-#view-resume .grid-2 > .card:nth-child(3){grid-column:1;grid-row:2}
+/* 「第三十九轮」简历视图改双列动态配平：画像拆成两卡后共四张，由 balanceResumeGrid()
+   按实测高度挑「左右总高差最小」的分列方式；同一行的两张卡由网格等高拉伸，余量收在卡内而不是页面底色开洞 */
+#view-resume .grid-2{align-items:stretch}
 /* 「第三十四轮」申学视图：偏好与推送两栏高度差近一屏，改成顺序全宽，不再有栏间空洞 */
 #view-study .grid-2{grid-template-columns:1fr}
 /* 锚点跳转时给卡片留出顶部空间 */
 #view-study > .card,#view-resume .grid-2 > .card{scroll-margin-top:78px}
-@media (max-width:960px){
-  #view-resume .grid-2 > .card:nth-child(2){grid-column:auto;grid-row:auto}
+@media (max-width:980px){
   .guide-strip{grid-template-columns:1fr 1fr}
 }
 @media (max-width:640px){ .guide-strip{grid-template-columns:1fr} }
@@ -862,10 +852,10 @@ button,.btn,.chip,.tab,.nav-item,.segmented button,.icon-btn,.tag-x,.clickable,a
       </div>
     </div>
     <nav class="nav" id="nav">
-      <button class="nav-item active" data-view="resume"><span class="nv-fig"><svg viewBox="0 0 300 100" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><path class="nv-road" d="M150 -10 C84 26 84 74 150 100"/><path class="nv-dash" d="M150 -10 C84 26 84 74 150 100"/><g class="nv-lm"><rect x="86" y="31" width="28" height="38" rx="6"/></g><path class="nv-ln" d="M93 41h13M93 49h13M93 57h8"/><circle class="nv-dot" cx="214" cy="40" r="3"/><circle class="nv-dot" cx="182" cy="82" r="2.5"/></svg></span><span class="nv-tx"><b class="nv-t">简历画像</b><span class="nv-d">上传简历，自动解析</span></span><span class="nv-go" aria-hidden="true">→</span></button>
-      <button class="nav-item" data-view="study"><span class="nv-fig"><svg viewBox="0 100 300 100" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><path class="nv-road" d="M150 100 C216 126 216 174 150 200"/><path class="nv-dash" d="M150 100 C216 126 216 174 150 200"/><g class="nv-lm"><circle cx="200" cy="150" r="16"/></g><path class="nv-ln" d="M200 138v6M200 156v6M188 150h6M212 150h6"/><path class="nv-needle" d="M200 140l7 12-7-3-7 3z"/><circle class="nv-dot" cx="84" cy="142" r="3.5"/><circle class="nv-dot" cx="118" cy="180" r="2.5"/></svg></span><span class="nv-tx"><b class="nv-t">申学规划</b><span class="nv-d">适配度 · 院校匹配</span></span><span class="nv-go" aria-hidden="true">→</span></button>
-      <button class="nav-item" data-view="job"><span class="nv-fig"><svg viewBox="0 200 300 100" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><path class="nv-road" d="M150 200 C84 226 84 274 150 300"/><path class="nv-dash" d="M150 200 C84 226 84 274 150 300"/><g class="nv-lm"><circle cx="100" cy="250" r="16"/></g><circle class="nv-ln" cx="100" cy="250" r="7"/><circle class="nv-needle" cx="100" cy="250" r="3"/><circle class="nv-dot" cx="214" cy="240" r="3"/><circle class="nv-dot" cx="182" cy="280" r="2.5"/></svg></span><span class="nv-tx"><b class="nv-t">求职匹配</b><span class="nv-d">按权重推荐岗位</span></span><span class="nv-go" aria-hidden="true">→</span></button>
-      <button class="nav-item" data-view="track"><span class="nv-fig"><svg viewBox="0 300 300 100" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><path class="nv-road" d="M150 300 C216 326 216 374 150 400"/><path class="nv-dash" d="M150 300 C216 326 216 374 150 400"/><g class="nv-lm"><rect x="183" y="338" width="34" height="24" rx="6"/></g><path class="nv-ln" d="M185 341l15 11 15-11"/><circle class="nv-dot" cx="84" cy="342" r="3.5"/><circle class="nv-dot" cx="118" cy="380" r="2.5"/></svg></span><span class="nv-tx"><b class="nv-t">投递中心</b><span class="nv-d">汇总链接 · 归档进度</span></span><span class="nv-go" aria-hidden="true">→</span></button>
+      <button class="nav-item active" data-view="resume"><span class="nv-ic"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="4" y="2.8" width="12" height="14.4" rx="2.2"/><path d="M7.2 6.5h5.6M7.2 9.5h5.6M7.2 12.5h3.4"/></svg></span><span class="nv-tx"><b class="nv-t">简历画像</b><span class="nv-d">上传简历，自动解析</span></span><span class="nv-go" aria-hidden="true">→</span></button>
+      <button class="nav-item" data-view="study"><span class="nv-ic"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7.2"/><path d="M12.8 7.2l-1.6 4-4 1.6 1.6-4z"/></svg></span><span class="nv-tx"><b class="nv-t">申学规划</b><span class="nv-d">适配度 · 院校匹配</span></span><span class="nv-go" aria-hidden="true">→</span></button>
+      <button class="nav-item" data-view="job"><span class="nv-ic"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="6.5" width="14" height="9.5" rx="2.2"/><path d="M7.4 6.5V5a1.6 1.6 0 0 1 1.6-1.6h2a1.6 1.6 0 0 1 1.6 1.6v1.5M3 10.4h14"/></svg></span><span class="nv-tx"><b class="nv-t">求职匹配</b><span class="nv-d">按权重推荐岗位</span></span><span class="nv-go" aria-hidden="true">→</span></button>
+      <button class="nav-item" data-view="track"><span class="nv-ic"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="5" width="14" height="10.5" rx="2.2"/><path d="M3.4 6.2l6.6 4.8 6.6-4.8"/></svg></span><span class="nv-tx"><b class="nv-t">投递中心</b><span class="nv-d">汇总链接 · 归档进度</span></span><span class="nv-go" aria-hidden="true">→</span></button>
     </nav>
     <div class="side-foot">
       <div class="profile-chip" id="sideProfile"><b>尚未导入简历</b>解析后将自动生成能力画像</div>
@@ -922,6 +912,16 @@ button,.btn,.chip,.tab,.nav-item,.segmented button,.icon-btn,.tag-x,.clickable,a
               <button class="btn primary sm" id="toStudy">开始规划</button>
             </div>
             <div id="profileForm"></div>
+          </div>
+
+          <div class="card" id="cardProfileB">
+            <div class="card-h">
+              <div>
+                <h3>语言与技能</h3>
+                <div class="desc">语言成绩、技能标签与实践经历 —— 匹配与文书都从这里取数</div>
+              </div>
+            </div>
+            <div id="profileFormB"></div>
           </div>
 
           <div class="card" id="cardInv">
@@ -2582,6 +2582,15 @@ function bindStudyNav() {
   const nav = document.getElementById("studyNav");
   if (!nav) return;
   /* 第三十五轮：大模块卡 —— 名称 + 一句「这里面是什么」，点卡片平滑跳到对应区块。 */
+  /* 「第三十九轮」图标块颜色按功能区分；图标描边色写死在各 svg 里 */
+  const IC = {
+    phdFit: ['<svg viewBox="0 0 16 16" style="stroke:#4F46E5"><path d="M2.5 11a6 6 0 1 1 11 0"/><path d="M8 11l3-4"/><circle cx="8" cy="11" r="1" fill="#4F46E5" stroke="none"/></svg>', '#EFEDFB'],
+    studyPref: ['<svg viewBox="0 0 16 16" style="stroke:#0E8FA5"><path d="M2 4.5h12M2 11.5h12"/><circle cx="6" cy="4.5" r="1.8" fill="#E0F2F5"/><circle cx="10.5" cy="11.5" r="1.8" fill="#E0F2F5"/></svg>', '#E0F2F5'],
+    dailyPush: ['<svg viewBox="0 0 16 16" style="stroke:#B26A0F"><rect x="2.5" y="3.5" width="11" height="10" rx="2"/><path d="M2.5 6.5h11M5.5 2v3M10.5 2v3"/></svg>', '#FAEEDA'],
+    docAdapt: ['<svg viewBox="0 0 16 16" style="stroke:#993C1D"><rect x="3" y="2.5" width="8.5" height="11" rx="1.5"/><path d="M5.5 5.5h4M5.5 8h4M5.5 10.5h2.5"/></svg>', '#FAECE7'],
+    profSearch: ['<svg viewBox="0 0 16 16" style="stroke:#185FA5"><rect x="2" y="3.5" width="12" height="9" rx="2"/><path d="M2.5 5l5.5 4 5.5-4"/></svg>', '#E6F1FB'],
+    schoolList: ['<svg viewBox="0 0 16 16" style="stroke:#3B6D11"><path d="M8 2.5l6 2.5-6 2.5L2 5z"/><path d="M4.5 6.5v3c0 1 1.6 2 3.5 2s3.5-1 3.5-2v-3"/><path d="M14 5v3.5"/></svg>', '#EAF3DE']
+  };
   const items = [
     ["phdFit", "适配评估", "博士五维评分与补强建议"],
     ["studyPref", "规划偏好", "方向 · 地区 · 学制 · 院校层次"],
@@ -2590,7 +2599,7 @@ function bindStudyNav() {
     ["profSearch", "导师套磁", "找教授主页，生成套磁邮件"],
     ["schoolList", "院校名单", "冲刺 / 稳妥 / 保底清单"]
   ];
-  nav.innerHTML = items.map(function (it) { return '<button type="button" class="pn-c" data-pn="' + it[0] + '"><span class="pn-t">' + it[1] + '</span><span class="pn-d">' + it[2] + '</span><span class="pn-go">→</span></button>'; }).join("");
+  nav.innerHTML = items.map(function (it) { var ic = IC[it[0]]; return '<button type="button" class="pn-c" data-pn="' + it[0] + '"><span class="pn-ic" style="background:' + ic[1] + '">' + ic[0] + '</span><span class="pn-mid"><span class="pn-t">' + it[1] + '</span><span class="pn-d">' + it[2] + '</span></span><span class="pn-go">→</span></button>'; }).join("");
   nav.querySelectorAll("[data-pn]").forEach(function (b) {
     b.onclick = function () {
       nav.querySelectorAll(".pn-c").forEach(function (x) { x.classList.remove("on"); });
@@ -2601,6 +2610,41 @@ function bindStudyNav() {
   });
 }
 
+/* 「第三十九轮」首屏双列配平：「导入简历」固定左上，其余三张按左右总高差最小分列；
+   测高时临时 align-self:start 拿自然高度，落位后交还等高拉伸。窄屏单列或视图隐藏时不干预。 */
+function balanceResumeGrid() {
+  const grid = document.querySelector('#view-resume .grid-2');
+  if (!grid) return;
+  const cards = ['cardImport', 'cardProfile', 'cardProfileB', 'cardInv'].map(id => document.getElementById(id)).filter(Boolean);
+  const clear = () => cards.forEach(c => { c.style.gridColumn = ''; c.style.gridRow = ''; });
+  if (window.innerWidth <= 980) { clear(); return; }
+  if (!grid.offsetHeight || cards.length < 4) return;
+  clear();
+  cards.forEach(c => { c.style.alignSelf = 'start'; });
+  const h = cards.map(c => c.getBoundingClientRect().height);
+  let best = null;
+  for (let mask = 0; mask < 8; mask++) {
+    const L = [0], R = [];
+    for (let i = 1; i < 4; i++) (((mask >> (i - 1)) & 1) ? L : R).push(i);
+    const sum = a => a.reduce((s, i) => s + h[i], 0);
+    const cost = Math.abs(sum(L) - sum(R));
+    if (!best || cost < best.cost) best = { cost: cost, L: L, R: R };
+  }
+  const place = (list, col) => list.forEach((idx, row) => { cards[idx].style.gridColumn = String(col); cards[idx].style.gridRow = String(row + 1); });
+  place(best.L, 1);
+  place(best.R, 2);
+  cards.forEach(c => { c.style.alignSelf = ''; });
+}
+function bindResumeBalance() {
+  const grid = document.querySelector('#view-resume .grid-2');
+  if (!grid || grid.dataset.balBound) return;
+  grid.dataset.balBound = '1';
+  let t = null;
+  const queue = () => { if (t) clearTimeout(t); t = setTimeout(balanceResumeGrid, 120); };
+  if (window.MutationObserver) new MutationObserver(queue).observe(grid, { childList: true, subtree: true });
+  window.addEventListener('resize', queue);
+  balanceResumeGrid();
+}
 function switchView(v) {
   $$('.nav-item').forEach(b => b.classList.toggle('active', b.dataset.view === v));
   $$('.view').forEach(s => s.classList.toggle('active', s.id === 'view-' + v));
@@ -2609,6 +2653,7 @@ function switchView(v) {
   if (v === 'study') renderStudy();
   if (v === 'job') renderJobs();
   if (v === 'track') renderTrack();
+  if (v === 'resume') balanceResumeGrid();  /* 「第三十九轮」回到首屏时重新配平（隐藏期间量不到高度） */
   try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch (e) { /* 环境不支持时忽略 */ }
 }
 
@@ -2659,6 +2704,9 @@ function renderProfileForm() {
   html.push('<div class="field"><label>专业方向（用于匹配）</label><select data-k="group">' +
     Object.keys(FIELD_MAP).map(k => '<option value="' + k + '"' + (k === p.group ? ' selected' : '') + '>' + FIELD_MAP[k].name + '</option>').join('') + '</select></div>');
   html.push('</div></div>');
+  /* 「第三十九轮」上半卡到此为止：基本信息 + 教育背景留在「简历画像」卡，其余分区进「语言与技能」卡 */
+  $('#profileForm').innerHTML = html.join('');
+  html.length = 0;
 
   html.push('<div class="profile-sec"><div class="sec-h"><h4>语言与科研</h4></div><div class="form-grid">');
   html.push('<div class="' + cls('lang') + '"><label>托福 ' + flag('lang') + '</label><input data-k="toefl" value="' + (p.lang.toefl == null ? '' : p.lang.toefl) + '" placeholder="如：102"></div>');
@@ -2681,7 +2729,7 @@ function renderProfileForm() {
   html.push('<div class="field" style="margin-top:12px"><label>目标 / 意向方向</label><input data-k="direction" value="' + esc(p.direction) + '" placeholder="如：多模态大模型 / 数据分析"></div>');
   html.push('</div>');
 
-  $('#profileForm').innerHTML = html.join('');
+  $('#profileFormB').innerHTML = html.join('');
 
   /* 字段 -> 决定「待补充」状态的 meta 键。语言三项共用 lang，其余各自独立。 */
   const META_KEY = {
@@ -2715,7 +2763,7 @@ function renderProfileForm() {
     else { fl.className = 'flag'; fl.textContent = ''; }
   }
 
-  $$('#profileForm [data-k]').forEach(function (el) {
+  $$('#profileForm [data-k],#profileFormB [data-k]').forEach(function (el) {
     /* 第三十五轮：毕业时间是只读的月份选择器（mp-in），只有 change 事件；其余照旧。 */
     const ev = (el.tagName === 'SELECT' || el.classList.contains('mp-in')) ? 'change' : 'input';
     el.addEventListener(ev, function () {
@@ -2753,7 +2801,7 @@ function renderProfileForm() {
         paintField(el, mk);
         /* 语言三项是一组，任一变化都要重画三者 */
         if (mk === 'lang') {
-          $$('#profileForm [data-k="toefl"],#profileForm [data-k="ielts"],#profileForm [data-k="cet6"]').forEach(function (x) { paintField(x, 'lang'); });
+          $$('#profileFormB [data-k="toefl"],#profileFormB [data-k="ielts"],#profileFormB [data-k="cet6"]').forEach(function (x) { paintField(x, 'lang'); });
         }
       }
       save(); renderTop();
@@ -7151,6 +7199,7 @@ function init() {
   renderInventory();
   bindMonthPickers();   /* 起止时间的月份下拉（第二十五轮） */
   bindStudyNav();       /* 「第三十四轮」申学视图锚点子导航 */
+  bindResumeBalance();  /* 「第三十九轮」首屏双列动态配平 */
   initRestoreStrip();   /* 「第三十四轮」恢复上次的资料时，把「不用重新导入」说在明处 */
 
   $('#sampleList').innerHTML = SAMPLES.map((s, i) => '<span class="chip" data-sample="' + i + '">' + esc(s.name) + '</span>').join('');
