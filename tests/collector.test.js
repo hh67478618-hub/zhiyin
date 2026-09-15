@@ -1139,6 +1139,60 @@ function runNowcoderReproSuite() {
           (rC.notice || []).some(function (n) { return /至今/.test(String(n)); }),
           JSON.stringify(rC.notice));
         winC.close();
+
+        /* 场景 D（第四十二轮）：官网已保存的表单 —— 时间已经是对的，不再重复点面板。
+           名称栏是检索组件（读不到文本），靠块内已保存的时间证据对号。 */
+        const winD = nkDom();
+        winD.document.querySelector('[data-t="w0Start"]').value = '2025-11';
+        winD.document.querySelector('[data-t="w0End"]').value = '2026-01';
+        return winD.fillComboFields({ fields: {}, sections: { work: [NK_WORKS[0]] } }).then(function (rD) {
+          const v4 = nkVals(winD);
+          ok('已保存表单：起止时间已经是对的 → 不再重复写（值原样保留）',
+            v4.w0Start === '2025-11' && v4.w0End === '2026-01',
+            JSON.stringify({ s: v4.w0Start, e: v4.w0End }));
+          ok('已保存表单：时间证据把名称为空的块对到京东健康（notice 说明「已经是」）',
+            (rD.notice || []).some(function (n) { return /已经是/.test(String(n)); }),
+            JSON.stringify(rD.notice));
+          winD.close();
+
+          /* 场景 E（第四十二轮）：名称栏全空 + 两块两条 → 拒绝按页序盲配并给出指引。 */
+          const winE = new JSDOM('<!DOCTYPE html><html><head><title>在线简历</title></head><body>' + nkWorkBlock('w0') + nkWorkBlock('w1') + '</body></html>',
+            { url: 'https://www.nowcoder.com/profile', runScripts: 'outside-only' });
+          winE.window.eval(src);
+          mockMtdPicker(winE.window);
+          return winE.window.fillComboFields({ fields: {}, sections: { work: NK_WORKS } }).then(function (rE) {
+            const v5 = {};
+            winE.window.document.querySelectorAll('[data-t]').forEach(function (el) { v5[el.dataset.t] = el.value; });
+            ok('歧义拒配：两块两条名称全空 → 起止时间一律不代填（宁可漏填不填错）',
+              v5.w0Start === '' && v5.w1Start === '' && v5.w1End === '',
+              JSON.stringify(v5));
+            ok('歧义拒配：notice 说明原因并指引「先补名称再点一次」',
+              (rE.notice || []).some(function (n) { return /名称栏/.test(String(n)); }),
+              JSON.stringify(rE.notice));
+            winE.window.close();
+
+            /* 场景 F（第四十二轮）：名称栏读不到（检索组件），但块里已保存的时间能对上号
+               → 按时间证据配对，DOM 顺序与载荷相反也不串。 */
+            const winF = new JSDOM('<!DOCTYPE html><html><head><title>在线简历</title></head><body>' + nkWorkBlock('w0') + nkWorkBlock('w1') + '</body></html>',
+              { url: 'https://www.nowcoder.com/profile', runScripts: 'outside-only' });
+            winF.window.eval(src);
+            mockMtdPicker(winF.window);
+            /* w0 里留着深圳海关的旧开始时间、w1 里留着京东健康的旧开始时间（与载荷顺序相反） */
+            winF.window.document.querySelector('[data-t="w0Start"]').value = '2024-05';
+            winF.window.document.querySelector('[data-t="w1Start"]').value = '2025-11';
+            return winF.window.fillComboFields({ fields: {}, sections: { work: NK_WORKS } }).then(function (rF) {
+              const v6 = {};
+              winF.window.document.querySelectorAll('[data-t]').forEach(function (el) { v6[el.dataset.t] = el.value; });
+              ok('时间证据配对：w0 的旧开始时间对上深圳海关 → 结束时间补 2025-07（不串到京东健康）',
+                v6.w0Start === '2024-05' && v6.w0End === '2025-07',
+                JSON.stringify({ s: v6.w0Start, e: v6.w0End }));
+              ok('时间证据配对：w1 对上京东健康 → 结束时间补 2026-01',
+                v6.w1Start === '2025-11' && v6.w1End === '2026-01',
+                JSON.stringify({ s: v6.w1Start, e: v6.w1End }));
+              winF.window.close();
+            });
+          });
+        });
       });
     });
   });

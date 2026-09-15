@@ -5,7 +5,7 @@
   "private": true,
   "scripts": {
     "test": "node tests/engine.test.js",
-    "test:all": "node tests/run-all.js"
+    "test:all": "node tests/engine.test.js && node tests/interaction.test.js && node tests/collector.test.js"
   },
   "repository": {
     "type": "git",

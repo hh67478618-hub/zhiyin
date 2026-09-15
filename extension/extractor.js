@@ -1529,8 +1529,28 @@ function fillComboFields(opts) {
   want('school', [/院校/, /学校/, /university/i, /college/i, /institute/i, /school/i], fields.school);
   want('major', [/专业/, /major/i], fields.major);
   want('edu', [/学历/, /文化程度/, /degree/i], fields.edu);
-  want('company', [/公司/, /单位/, /用人单位/, /employer/i], fields.company);
-  want('role', [/职位名称/, /岗位名称/, /职务/, /^职位$/, /^岗位$/], fields.role);
+  /* 第四十二轮：公司 / 职位优先由分段循环按段块安排（多段工作各填各的）。
+     只有当「带起止时间的完整工作段块」里不含这类栏时（公司栏是表头上
+     独立的一栏，比如申请表头那种形态），才走旧的单值兜底 ——
+     旧口径无条件下第一份工作，多段页会把第 1 段的名字写错位置。 */
+  function fullWorkHas(pats) {
+    var hit = false;
+    groupBlocks('work').forEach(function (b) {
+      var hasDate = false, hasIt = false;
+      b.inputs.forEach(function (x) {
+        if (labelMatch(x, PAT_START) || labelMatch(x, PAT_END)) hasDate = true;
+        if (labelMatch(x, pats)) hasIt = true;
+      });
+      if (hasDate && hasIt) hit = true;
+    });
+    return hit;
+  }
+  if (!fullWorkHas([/公司/, /单位/, /用人单位/, /employer/i])) {
+    want('company', [/公司/, /单位/, /用人单位/, /employer/i], fields.company);
+  }
+  if (!fullWorkHas([/职位名称/, /岗位名称/, /职务/, /^职位$/, /^岗位$/])) {
+    want('role', [/职位名称/, /岗位名称/, /职务/, /^职位$/, /^岗位$/], fields.role);
+  }
   /* 单值日期：载荷直接给了毕业/入学时间（没有结构化经历数据时走这里） */
   want('gradYear', [/毕业(时间|年份|年月|日期)/, /graduation/i], fields.gradYear, true);
   want('gradEnd', [/入学|就读(开始|起止)/], fields.gradEnd, true);
@@ -1574,18 +1594,31 @@ function fillComboFields(opts) {
     });
     return order.map(function (k) { return map[k]; });
   }
-  /* 块的身份值：名称类栏的现值（普通输入框读 value；检索下拉读外壳文本） */
+  /* 块的身份值：名称类栏的现值（普通输入框读 value；检索下拉读外壳文本）。
+     第四十二轮：外壳文本改为「收集外壳里全部候选节点、挑最有信息量的一条」——
+     旧写法只取第一个命中节点，在 mtd / antd 的 DOM 里常撞上空容器，
+     明明已选好公司却读出空串 → 锚点丢失 → 退回按顺序硬配（实测串段两处）。 */
+  function shellText(wrap) {
+    if (!wrap) return '';
+    var best = '';
+    try {
+      var ns = wrap.querySelectorAll('[class*="selected"],[class*="value"],[title]');
+      for (var i = 0; i < ns.length; i++) {
+        var t = clean(ns[i].textContent);
+        if (!t && ns[i].getAttribute) t = clean(ns[i].getAttribute('title'));
+        if (!t || /请选择|请输入|placeholder/i.test(t) || t.length > 60) continue;
+        if (t.length > best.length) best = t;
+      }
+    } catch (e) { /* 忽略 */ }
+    return clean(best);
+  }
   function blockAnchor(b, pats) {
     for (var i = 0; i < b.inputs.length; i++) {
       var x = b.inputs[i];
       if (!labelMatch(x, pats)) continue;
       var v = clean(x.el.value);
-      if (!v && x.wrap) {
-        var sp = null;
-        try { sp = x.wrap.querySelector('[class*="selected"],[class*="value"]'); } catch (e) { sp = null; }
-        v = clean((sp && sp.textContent) || '');
-        if (/请选择|请输入/.test(v)) v = '';
-      }
+      if (!v && x.wrap) v = shellText(x.wrap);
+      if (!v && x.el.getAttribute) v = clean(x.el.getAttribute('title'));
       if (v) return v;
     }
     return '';
@@ -1599,13 +1632,16 @@ function fillComboFields(opts) {
     }
     return null;
   }
-  /* 贪心配对：分数高的先配，一条 / 一块最多配一次 */
-  function pairByAnchor(list, blocks, nameOfIt) {
+  /* 贪心配对：分数高的先配，一条 / 一块最多配一次。
+     第四十二轮：身份证据不止名字 —— 块里已保存的起止时间对得上哪条经历，也算强证据
+     （官网预填 / 已保存的表单上，名称栏常是检索组件读不到文本，时间却是明文）。
+     返回 { assign, rest }：不再在函数内部按顺序兜底（兜底策略上移到调用方）。 */
+  function pairByAnchor(list, blocks, nameOfIt, timeScoreFn) {
     var assign = [], usedE = {}, usedB = {}, cands = [];
     blocks.forEach(function (b, bi) {
-      if (!b.anchor) return;
       list.forEach(function (it, ei) {
-        var s = nameScore(b.anchor, nameOfIt(it, ei));
+        var s = b.anchor ? nameScore(b.anchor, nameOfIt(it, ei)) : 0;
+        if (s < 2 && timeScoreFn) { try { s = Math.max(s, timeScoreFn(b, it)); } catch (e2) { /* 忽略 */ } }
         if (s >= 2) cands.push({ bi: bi, ei: ei, s: s });
       });
     });
@@ -1616,11 +1652,35 @@ function fillComboFields(opts) {
     });
     var rest = [];
     list.forEach(function (it, ei) { if (!usedE[ei]) rest.push(ei); });
-    blocks.forEach(function (b, bi) {
-      if (assign[bi] !== undefined) return;
-      assign[bi] = rest.length ? rest.shift() : -1;
+    return { assign: assign, rest: rest };
+  }
+  /* 块内已有起止时间（官网预填 / 已保存）：能读到就读出来 */
+  function dateVals(b) {
+    var out = { s: '', e: '' };
+    b.inputs.forEach(function (x) {
+      var v = clean(x.el.value);
+      if (!v) return;
+      if (!out.s && labelMatch(x, PAT_START)) out.s = v;
+      else if (!out.e && labelMatch(x, PAT_END)) out.e = v;
+      else if (!out.s && /起止|期间/.test(x.label || '')) { var rr = timeRange(v); out.s = rr[0]; out.e = rr[1]; }
     });
-    return assign;
+    return out;
+  }
+  function ymEq(a, bv) {
+    var p = ymOf(a), q = ymOf(bv);
+    return !!(p && q && p.y === q.y && (!p.m || !q.m || p.m === q.m));
+  }
+  /* 时间证据分：开始+结束都对上 3 分，只对上一头 2 分（和名字匹配同池竞争） */
+  function timeScore(b, it) {
+    var r = timeRange(it.time);
+    if (!r[0]) return 0;
+    var dv = dateVals(b);
+    if (!dv.s && !dv.e) return 0;
+    var sm = !!(dv.s && ymEq(r[0], dv.s));
+    var em = !!(dv.e && r[1] && !isPresentWord(r[1]) && ymEq(r[1], dv.e));
+    if (sm && em) return 3;
+    if (sm || em) return 2;
+    return 0;
   }
   function wantRangesFor(list, tag, sect, anchorPats, nameOfIt, comboPats) {
     var blocks = groupBlocks(sect);
@@ -1632,9 +1692,38 @@ function fillComboFields(opts) {
       });
       return;
     }
-    blocks.forEach(function (b) { b.anchor = blockAnchor(b, anchorPats); });   /* 读块内名称栏现值作身份 */
-    var assign = pairByAnchor(list, blocks, nameOfIt);
-    blocks.forEach(function (b, bi) {
+    if (!list.length) return;   /* 这组没有要填的条目：别多话，也别报错 */
+    /* 第四十二轮补：只有带起止时间栏的块才算「经历段块」参与配对；
+       没有时间的块（表头上独立的「公司名称」栏之类）不参与，也不触发拒配 ——
+       那种栏交给前面的单值兜底去填。 */
+    var expBlocks = blocks.filter(function (b) {
+      return b.inputs.some(function (x) { return labelMatch(x, PAT_START) || labelMatch(x, PAT_END); });
+    });
+    if (!expBlocks.length) {
+      list.forEach(function (it) {
+        var r0 = timeRange(it.time);
+        if (r0[0]) results.missed.push({ field: tag + 'Start', value: r0[0], reason: '这一页没有带起止时间的经历表块，起止时间填不了' });
+      });
+      return;
+    }
+    expBlocks.forEach(function (b) { b.anchor = blockAnchor(b, anchorPats); });   /* 读块内名称栏现值作身份 */
+    var pr = pairByAnchor(list, expBlocks, nameOfIt, timeScore);
+    var assign = pr.assign;
+    /* 第四十二轮：取消「按页序硬配」。名字、时间都对不上的块只在
+       「恰好剩一块 × 恰好剩一条」时才代配；否则说明原因请用户先补名称再点一次
+       —— 宁可漏填不填错（实测：页序硬配把项目时间填进工作经历）。 */
+    var rest = pr.rest.slice();
+    var unmatchedB = [];
+    expBlocks.forEach(function (b, bi) { if (assign[bi] == null || assign[bi] < 0) unmatchedB.push(bi); });
+    var refused = false;
+    if (unmatchedB.length === 1 && rest.length === 1) {
+      assign[unmatchedB[0]] = rest[0];
+    } else if (unmatchedB.length > 0) {
+      refused = true;
+      results.notice.push('有 ' + unmatchedB.length + ' 段的名称栏在页面上是空的（和这次的资料也对不上），判断不了每段对应哪条经历 —— 起止时间没有代填。请先把公司 / 项目名选好，再点一次「辅助填写」，时间会按名字对号入座');
+      unmatchedB.forEach(function (bi) { assign[bi] = -1; });
+    }
+    expBlocks.forEach(function (b, bi) {
       var ei = assign[bi];
       if (ei == null || ei < 0 || !list[ei]) return;
       var it = list[ei];
@@ -1642,32 +1731,55 @@ function fillComboFields(opts) {
       var r = timeRange(it.time);
       if (r[0]) {
         var s = pickIn(b, PAT_START);
-        if (s) jobs.push({ x: s, field: tag + 'Start', value: r[0], date: true });
+        if (s) {
+          /* 已经是目标值的栏不再重复写：重复点面板反而可能把对的改错 */
+          var ymS = ymOf(r[0]);
+          if (ymS && landed(s.el, ymS)) {
+            results.notice.push('「' + label + '」的开始时间已经是 ' + clean(s.el.value) + '，没有重复填');
+          } else {
+            jobs.push({ x: s, field: tag + 'Start', value: r[0], date: true });
+          }
+        }
         else results.missed.push({ field: tag + 'Start', value: r[0], reason: '「' + label + '」这一段没找到开始时间栏' });
       }
       if (r[1] && !isPresentWord(r[1])) {
         var e = pickIn(b, PAT_END);
-        if (e) jobs.push({ x: e, field: tag + 'End', value: r[1], date: true });
+        if (e) {
+          var ymE = ymOf(r[1]);
+          if (ymE && landed(e.el, ymE)) {
+            results.notice.push('「' + label + '」的结束时间已经是 ' + clean(e.el.value) + '，没有重复填');
+          } else {
+            jobs.push({ x: e, field: tag + 'End', value: r[1], date: true });
+          }
+        }
         else results.missed.push({ field: tag + 'End', value: r[1], reason: '「' + label + '」这一段没找到结束时间栏' });
       } else if (isPresentWord(r[1])) {
         results.notice.push('「' + clean(r[1]) + '」的结束时间不填 —— 这类表要在旁边勾「至今」，请手动勾一下');
       }
-      /* 公司 / 职位检索栏逐块安排：旧口径只安排第一个公司栏，第 2 段起从来没人填
-         （用户实测：第 2 段工作经历的公司名称空着）。 */
+      /* 公司 / 职位检索栏逐块安排（旧口径只安排第一个公司栏，第 2 段起没人填）。
+         第四十二轮：这栏已经有名字（页面预填 / 第一遍已填）就不再点开下拉重选 ——
+         对着已有内容重选，一旦选错反而把对的改错。 */
       if (comboPats) {
         comboPats.forEach(function (cp) {
           var v = it[cp.key];
           if (v == null || clean(v) === '') return;
+          if (blockAnchor(b, cp.pats)) return;
           var h = pickIn(b, cp.pats);
           if (h) jobs.push({ x: h, field: cp.key, value: String(v), date: false });
         });
       }
     });
-    /* 载荷里多出来的条目：页面上没有它的表单块，如实报告 */
+    /* 载荷里多出来的条目：如实报告。「对不上号（拒配）」和「表单不在这页」是两回事 */
     list.forEach(function (it, ei) {
       if (assign.indexOf(ei) >= 0) return;
       var r = timeRange(it.time);
-      if (r[0]) results.missed.push({ field: tag + 'Start', value: r[0], reason: '「' + (nameOfIt(it, ei) || '第' + (ei + 1) + '条') + '」的表单不在这页上（分步 / 分弹窗填写时，请打开对应表单再点一次）' });
+      if (!r[0]) return;
+      results.missed.push({
+        field: tag + 'Start', value: r[0],
+        reason: refused
+          ? '「' + (nameOfIt(it, ei) || '第' + (ei + 1) + '条') + '」的时间没有代填 —— 页面上的段块对不上号（名称栏是空的）。先把名称选好再点一次，就能按名字填上'
+          : '「' + (nameOfIt(it, ei) || '第' + (ei + 1) + '条') + '」的表单不在这页上（分步 / 分弹窗填写时，请打开对应表单再点一次）'
+      });
     });
   }
   wantRangesFor(edu, 'education', 'edu', [/院校/, /学校/, /university/i, /school/i],
