@@ -130,6 +130,17 @@ p{margin:0}
   transition:opacity .26s,transform .26s;box-shadow:var(--shadow-brand);
 }
 .nav-item:hover .nv-go{opacity:1;transform:translate(0,-50%)}
+/* 「第四十轮」档案速览面板：占住导航与底部资料卡之间的空白，数字随状态刷新 */
+.side-info{flex:1 0 auto;margin-top:12px;min-height:0;overflow:auto;background:linear-gradient(180deg,var(--surface-2),#fff);border:1px solid var(--line2);border-radius:var(--radius-m);padding:13px;display:flex;flex-direction:column;gap:9px}
+.side-info .si-h{font-size:12px;font-weight:700;color:var(--ink3);letter-spacing:.5px}
+.side-info .si-stats{font-size:12.5px;color:var(--ink2)}
+.side-info .si-stats b{font-size:16px;color:var(--brand-deep);font-weight:600}
+.side-info .si-sep{margin:0 6px;color:var(--ink4)}
+.side-info .si-tip{font-size:11.5px;color:var(--ink3);line-height:1.65}
+.side-info .btn{margin-top:2px}
+/* 「第四十轮」个人资料卡可点击 → 跳资料编辑（简历画像视图） */
+.profile-chip{cursor:pointer;transition:border-color .2s,background .2s}
+.profile-chip:hover{border-color:var(--brand-line);background:var(--brand-soft)}
 .side-foot{margin-top:auto;border-top:1px solid var(--line);padding-top:14px;display:flex;flex-direction:column;gap:10px}
 .profile-chip{
   background:linear-gradient(135deg,var(--surface-2),#fff);border:1px solid var(--line);
@@ -270,7 +281,8 @@ p{margin:0}
 .drop .t2{font-size:12px;color:var(--ink3)}
 #rawText{width:100%;min-height:140px;padding:14px 16px;border-radius:12px;border:1px solid var(--line);resize:vertical;line-height:1.7;font-size:13px;transition:.18s}
 #rawText:focus{outline:none;border-color:var(--brand);box-shadow:0 0 0 3px rgba(79,70,229,.12)}
-.parse-log{margin-top:14px;font-size:12.5px;color:var(--ink2);display:flex;flex-direction:column;gap:6px;padding:14px;background:var(--surface-2);border-radius:12px;border:1px solid var(--line2)}
+/* 「第四十轮」解析日志限高滚动：解析长简历时列出几十条明细，不限制会把导入卡撑到近两千像素 */
+.parse-log{margin-top:14px;font-size:12.5px;color:var(--ink2);display:flex;flex-direction:column;gap:6px;padding:14px;background:var(--surface-2);border-radius:12px;border:1px solid var(--line2);max-height:230px;overflow:auto}
 .parse-log .li{display:flex;gap:8px;align-items:flex-start;line-height:1.55}
 .parse-log .dot{width:7px;height:7px;border-radius:50%;background:var(--ok);margin-top:7px;flex:0 0 7px;box-shadow:0 0 0 3px var(--ok-soft)}
 .parse-log .dot.gray{background:#C6C6D2;box-shadow:0 0 0 3px transparent}
@@ -816,9 +828,17 @@ button,.btn,.chip,.tab,.nav-item,.segmented button,.icon-btn,.tag-x,.clickable,a
 .ps-sug button{display:block;width:100%;text-align:left;padding:8px 12px;border:0;background:none;font:inherit;font-size:13.5px;color:var(--ink2);cursor:pointer}
 .ps-sug button:hover{background:var(--brand-soft);color:var(--brand-deep)}
 .ps-sug .sug-empty{padding:8px 12px;font-size:12.5px;color:var(--ink3)}
-/* 「第三十九轮」简历视图改双列动态配平：画像拆成两卡后共四张，由 balanceResumeGrid()
-   按实测高度挑「左右总高差最小」的分列方式；同一行的两张卡由网格等高拉伸，余量收在卡内而不是页面底色开洞 */
-#view-resume .grid-2{align-items:stretch}
+/* 「第四十轮」首屏双列改独立栏：两栏各自堆叠、不强制同行对齐（同行拉伸会把余量变成卡内大空腔）；
+   分列仍取「左右总高差最小」，矮栏末尾的「怎么用」卡 flex:1 弹性补齐底部 */
+#resumeGrid .rcol{display:flex;flex-direction:column;gap:18px;min-width:0}
+#resumeGrid{align-items:stretch}
+#resumeTips{flex:1 0 auto}
+#resumeTips .rt-h{font-size:13.5px;font-weight:700;color:var(--ink)}
+#resumeTips .rt-t{font-size:12.5px;color:var(--ink2);line-height:1.9}
+#resumeTips .rt-t b{color:var(--brand-deep)}
+@media (max-width:980px){
+  #resumeGrid .rcol{display:contents}
+}
 /* 「第三十四轮」申学视图：偏好与推送两栏高度差近一屏，改成顺序全宽，不再有栏间空洞 */
 #view-study .grid-2{grid-template-columns:1fr}
 /* 锚点跳转时给卡片留出顶部空间 */
@@ -857,6 +877,12 @@ button,.btn,.chip,.tab,.nav-item,.segmented button,.icon-btn,.tag-x,.clickable,a
       <button class="nav-item" data-view="job"><span class="nv-ic"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="6.5" width="14" height="9.5" rx="2.2"/><path d="M7.4 6.5V5a1.6 1.6 0 0 1 1.6-1.6h2a1.6 1.6 0 0 1 1.6 1.6v1.5M3 10.4h14"/></svg></span><span class="nv-tx"><b class="nv-t">求职匹配</b><span class="nv-d">按权重推荐岗位</span></span><span class="nv-go" aria-hidden="true">→</span></button>
       <button class="nav-item" data-view="track"><span class="nv-ic"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="5" width="14" height="10.5" rx="2.2"/><path d="M3.4 6.2l6.6 4.8 6.6-4.8"/></svg></span><span class="nv-tx"><b class="nv-t">投递中心</b><span class="nv-d">汇总链接 · 归档进度</span></span><span class="nv-go" aria-hidden="true">→</span></button>
     </nav>
+    <div class="side-info" id="sideInfo">
+      <div class="si-h">档案速览</div>
+      <div class="si-stats"><b id="siExp">0</b> 段经历<span class="si-sep">·</span><b id="siAch">0</b> 条成就<span class="si-sep">·</span><b id="siApp">0</b> 条登记</div>
+      <div class="si-tip">投递在官网发生；这里登记结果、攒进度。数据仅保存在本机浏览器。</div>
+      <button class="btn sm" id="siGuide">查看使用指南</button>
+    </div>
     <div class="side-foot">
       <div class="profile-chip" id="sideProfile"><b>尚未导入简历</b>解析后将自动生成能力画像</div>
       <button class="btn sm" id="helpBtn" title="扩展怎么装、数据怎么导">使用指南</button>
@@ -877,7 +903,8 @@ button,.btn,.chip,.tab,.nav-item,.segmented button,.icon-btn,.tag-x,.clickable,a
     <div class="stage">
       <section class="view active" id="view-resume">
         <div class="guide-strip" id="guideStrip"></div>
-        <div class="grid-2">
+        <div class="grid-2" id="resumeGrid">
+          <div class="rcol" id="rcolL">
           <div class="card" id="cardImport">
             <div class="card-h">
               <div>
@@ -902,7 +929,9 @@ button,.btn,.chip,.tab,.nav-item,.segmented button,.icon-btn,.tag-x,.clickable,a
             <div class="chips" id="sampleList"></div>
             <div class="parse-log" id="parseLog"></div>
           </div>
+          </div>
 
+          <div class="rcol" id="rcolR">
           <div class="card" id="cardProfile">
             <div class="card-h">
               <div>
@@ -935,7 +964,16 @@ button,.btn,.chip,.tab,.nav-item,.segmented button,.icon-btn,.tag-x,.clickable,a
               </div>
             </div>
             <div id="invList"></div>
-            <div class="hint" style="margin-top:12px;margin-bottom:6px;font-weight:600;color:var(--ink)">＋ 添加一条成就</div>
+          </div>
+
+          <div class="card" id="cardInvAdd">
+            <div class="card-h">
+              <div>
+                <h3>添加成就</h3>
+                <div class="desc">成就挂在经历下，投不同岗位时整段替换 —— 官网分段表单的素材就从这里出</div>
+              </div>
+            </div>
+            <div class="hint" style="margin-bottom:6px;font-weight:600;color:var(--ink)">＋ 添加一条成就</div>
             <div style="display:grid;grid-template-columns:1.4fr 1fr;gap:10px">
               <div><div class="hint" style="margin-bottom:4px">项目 / 经历名称 <span style="color:var(--ink4)">（填新的名字 = 自动新建一段经历）</span></div><input id="invProj" placeholder="如：推荐召回系统优化"></div>
               <div><div class="hint" style="margin-bottom:4px">成果数字（选填）</div><input id="invMetric" placeholder="如：20%、5000 万/日、12 人"></div>
@@ -957,6 +995,12 @@ button,.btn,.chip,.tab,.nav-item,.segmented button,.icon-btn,.tag-x,.clickable,a
               <button class="btn primary sm" id="invAddBtn">＋ 添加到仓库</button>
               <button class="btn sm" id="invClearFormBtn">清空表单</button>
             </div>
+          </div>
+
+          <div class="card" id="resumeTips">
+            <div class="rt-h">怎么用这套工具</div>
+            <div class="rt-t">① <b>导入简历</b>生成画像，识别结果都可手动修正；<br>② <b>申学规划</b>算适配度、排冲稳保名单，<b>求职匹配</b>按你调的权重推荐岗位；<br>③ 准备投递时<b>复制填表数据</b>去官网填写，回来在<b>投递中心</b>登记进度、存提交回执；<br>④ 数据仅保存在本机浏览器，不会上传 —— 详细说明见左下角「使用指南」。</div>
+          </div>
           </div>
         </div>
       </section>
@@ -2509,6 +2553,14 @@ const VIEW_INFO = {
   track: ['投递中心', '汇总官网投递链接与各家真实流程，存下提交回执，去官网确认后回来归档状态']
 };
 
+/* 「第四十轮」侧栏速览：经历 / 成就 / 登记三个数字，renderTop 与首屏布局观察器都会刷它 */
+function updateSideInfo() {
+  const siE = document.getElementById('siExp');
+  if (!siE) return;
+  siE.textContent = String((state.experiences || []).length);
+  document.getElementById('siAch').textContent = String((state.inventory || []).length);
+  document.getElementById('siApp').textContent = String((state.applications || []).length);
+}
 function renderTop() {
   const p = state.profile;
   const chips = [];
@@ -2523,6 +2575,7 @@ function renderTop() {
   $('#sideProfile').innerHTML = p.parsed
     ? '<b>' + esc(p.name || '未命名用户') + '</b>' + esc([p.edu, p.major].filter(Boolean).join(' · ') || '画像待补充')
     : '<b>尚未导入简历</b>解析后将自动生成能力画像';
+  updateSideInfo();  /* 「第四十轮」侧栏速览数字 */
   renderGuide();
 }
 
@@ -2610,37 +2663,56 @@ function bindStudyNav() {
   });
 }
 
-/* 「第三十九轮」首屏双列配平：「导入简历」固定左上，其余三张按左右总高差最小分列；
-   测高时临时 align-self:start 拿自然高度，落位后交还等高拉伸。窄屏单列或视图隐藏时不干预。 */
+/* 「第四十轮」首屏独立栏 Masonry：五张卡按「左右总高差最小」分列（导入固定左上）；
+   两栏不再强制同行对齐，矮栏底部的「怎么用」卡 flex:1 弹性补齐。分列结果没变就不动 DOM（防观察器回环）。
+   高度直接在现布局里量：rcol 是纵向 flex，卡片高度天然不受 stretch 污染。 */
 function balanceResumeGrid() {
-  const grid = document.querySelector('#view-resume .grid-2');
-  if (!grid) return;
-  const cards = ['cardImport', 'cardProfile', 'cardProfileB', 'cardInv'].map(id => document.getElementById(id)).filter(Boolean);
-  const clear = () => cards.forEach(c => { c.style.gridColumn = ''; c.style.gridRow = ''; });
-  if (window.innerWidth <= 980) { clear(); return; }
-  if (!grid.offsetHeight || cards.length < 4) return;
-  clear();
-  cards.forEach(c => { c.style.alignSelf = 'start'; });
-  const h = cards.map(c => c.getBoundingClientRect().height);
-  let best = null;
-  for (let mask = 0; mask < 8; mask++) {
-    const L = [0], R = [];
-    for (let i = 1; i < 4; i++) (((mask >> (i - 1)) & 1) ? L : R).push(i);
-    const sum = a => a.reduce((s, i) => s + h[i], 0);
-    const cost = Math.abs(sum(L) - sum(R));
-    if (!best || cost < best.cost) best = { cost: cost, L: L, R: R };
+  const grid = document.getElementById('resumeGrid');
+  const colL = document.getElementById('rcolL');
+  const colR = document.getElementById('rcolR');
+  const tips = document.getElementById('resumeTips');
+  if (!grid || !colL || !colR || !tips) return;
+  const ids = ['cardImport', 'cardProfile', 'cardProfileB', 'cardInv', 'cardInvAdd'];
+  const cards = ids.map(id => document.getElementById(id)).filter(Boolean);
+  if (cards.length < ids.length) return;
+  if (window.innerWidth <= 980) {
+    ids.forEach(id => { const c = document.getElementById(id); if (c) colL.appendChild(c); });
+    colL.appendChild(tips);
+    grid.dataset.balSig = 'stacked';
+    return;
   }
-  const place = (list, col) => list.forEach((idx, row) => { cards[idx].style.gridColumn = String(col); cards[idx].style.gridRow = String(row + 1); });
-  place(best.L, 1);
-  place(best.R, 2);
-  cards.forEach(c => { c.style.alignSelf = ''; });
+  if (!grid.offsetHeight) return;
+  const h = cards.map(c => c.getBoundingClientRect().height);
+  tips.style.flex = '0 0 auto';
+  const tipsMin = tips.getBoundingClientRect().height + 18;
+  tips.style.flex = '';
+  const cands = [];
+  for (let mask = 0; mask < 16; mask++) {
+    const L = [0], R = [];
+    for (let i = 1; i < 5; i++) (((mask >> (i - 1)) & 1) ? L : R).push(i);
+    const sum = a => a.reduce((s, i) => s + h[i], 0);
+    cands.push({ L: L, R: R, diff: Math.abs(sum(L) - sum(R)) });
+  }
+  /* 底部全对齐的充要条件：裸高差 ≥ 说明卡自然高度（余量全由说明卡吸收）。
+     够得着的候选取最小差（说明卡少被撑高）；全都够不着就选最大差（错得最少）。 */
+  const fit = cands.filter(c => c.diff >= tipsMin);
+  const best = fit.length ? fit.reduce((a, b) => (b.diff < a.diff ? b : a)) : cands.reduce((a, b) => (b.diff > a.diff ? b : a));
+  const sumL = best.L.reduce((s, i) => s + h[i], 0);
+  const sumR = best.R.reduce((s, i) => s + h[i], 0);
+  const tipsLeft = sumL <= sumR;
+  const sig = best.L.join(',') + '|' + best.R.join(',') + '|T' + (tipsLeft ? 'L' : 'R');
+  if (grid.dataset.balSig === sig) return;
+  grid.dataset.balSig = sig;
+  best.L.forEach(i => colL.appendChild(cards[i]));
+  best.R.forEach(i => colR.appendChild(cards[i]));
+  (tipsLeft ? colL : colR).appendChild(tips);
 }
 function bindResumeBalance() {
   const grid = document.querySelector('#view-resume .grid-2');
   if (!grid || grid.dataset.balBound) return;
   grid.dataset.balBound = '1';
   let t = null;
-  const queue = () => { if (t) clearTimeout(t); t = setTimeout(balanceResumeGrid, 120); };
+  const queue = () => { if (t) clearTimeout(t); t = setTimeout(function () { updateSideInfo(); balanceResumeGrid(); }, 120); };
   if (window.MutationObserver) new MutationObserver(queue).observe(grid, { childList: true, subtree: true });
   window.addEventListener('resize', queue);
   balanceResumeGrid();
@@ -7221,6 +7293,11 @@ function init() {
     switchView('study');
   });
   $('#helpBtn').addEventListener('click', openHelpModal);   /* 第三十五轮 */
+  /* 「第四十轮」资料卡可点击 → 跳资料编辑；速览面板的指南按钮 */
+  const spChip = document.getElementById('sideProfile');
+  if (spChip) { spChip.title = '点击修改个人资料'; spChip.onclick = function () { switchView('resume'); }; }
+  const siG = document.getElementById('siGuide');
+  if (siG) siG.onclick = function () { openHelpModal(); };
   $('#resetAll').addEventListener('click', function () {
     openModal('清空本地数据', '将删除浏览器中保存的简历画像、偏好与投递记录', '<div class="hint">此操作不可撤销。清空后需要重新导入简历。</div>', [
       { label: '取消', cls: 'btn', act: closeModal },
