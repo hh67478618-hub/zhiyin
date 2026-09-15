@@ -133,11 +133,19 @@ p{margin:0}
 /* 「第四十轮」档案速览面板：占住导航与底部资料卡之间的空白，数字随状态刷新 */
 .side-info{flex:1 0 auto;margin-top:12px;min-height:0;overflow:auto;background:linear-gradient(180deg,var(--surface-2),#fff);border:1px solid var(--line2);border-radius:var(--radius-m);padding:13px;display:flex;flex-direction:column;gap:9px}
 .side-info .si-h{font-size:12px;font-weight:700;color:var(--ink3);letter-spacing:.5px}
-.side-info .si-stats{font-size:12.5px;color:var(--ink2)}
-.side-info .si-stats b{font-size:16px;color:var(--brand-deep);font-weight:600}
-.side-info .si-sep{margin:0 6px;color:var(--ink4)}
+.side-info .si-stats{display:flex;gap:6px}
+.side-info .si-stat{flex:1;display:flex;flex-direction:column;align-items:center;gap:1px;background:var(--surface-2);border:1px solid var(--line);border-radius:9px;padding:7px 4px;cursor:pointer;transition:border-color .2s,background .2s}
+.side-info .si-stat:hover{border-color:var(--brand-line);background:var(--brand-soft)}
+.side-info .si-stat b{font-size:16px;color:var(--brand-deep);font-weight:600}
+.side-info .si-stat span{font-size:11px;color:var(--ink3)}
 .side-info .si-tip{font-size:11.5px;color:var(--ink3);line-height:1.65}
-.side-info .btn{margin-top:2px}
+/* 「第四十一轮」速览管理弹窗的行 */
+.qm-row{display:flex;gap:10px;align-items:flex-start;padding:10px 2px;border-bottom:1px dashed var(--line)}
+.qm-row:last-child{border-bottom:none}
+.qm-main{flex:1;min-width:0}
+.qm-name{font-size:13px;font-weight:600;color:var(--ink);line-height:1.5}
+.qm-sub{font-size:12px;color:var(--ink3);margin-top:2px;line-height:1.5;word-break:break-all}
+.qm-acts{flex:0 0 auto;display:flex;gap:6px}
 /* 「第四十轮」个人资料卡可点击 → 跳资料编辑（简历画像视图） */
 .profile-chip{cursor:pointer;transition:border-color .2s,background .2s}
 .profile-chip:hover{border-color:var(--brand-line);background:var(--brand-soft)}
@@ -880,9 +888,12 @@ button,.btn,.chip,.tab,.nav-item,.segmented button,.icon-btn,.tag-x,.clickable,a
     </nav>
     <div class="side-info" id="sideInfo">
       <div class="si-h">档案速览</div>
-      <div class="si-stats"><b id="siExp">0</b> 段经历<span class="si-sep">·</span><b id="siAch">0</b> 条成就<span class="si-sep">·</span><b id="siApp">0</b> 条登记</div>
-      <div class="si-tip">投递在官网发生；这里登记结果、攒进度。数据仅保存在本机浏览器。</div>
-      <button class="btn sm" id="siGuide">查看使用指南</button>
+      <div class="si-stats">
+        <button class="si-stat" id="siExpBtn" title="点击管理经历"><b id="siExp">0</b><span>段经历</span></button>
+        <button class="si-stat" id="siAchBtn" title="点击管理成就"><b id="siAch">0</b><span>条成就</span></button>
+        <button class="si-stat" id="siAppBtn" title="点击管理登记"><b id="siApp">0</b><span>条登记</span></button>
+      </div>
+      <div class="si-tip">点数字可快速管理 · 投递在官网发生，这里登记结果、攒进度。</div>
     </div>
     <div class="side-foot">
       <div class="profile-chip" id="sideProfile"><b>尚未导入简历</b>解析后将自动生成能力画像</div>
@@ -6451,6 +6462,209 @@ function clearInventoryForm() {
   });
 }
 
+/* ---------- 「第四十一轮」档案速览：三个数字可点击 → 独立管理弹窗 ----------
+   速览是入口不是终点：点数字进对应管理弹窗，改动实时落库并同步主视图。
+   经历的编辑 / 删除弹窗与简历画像里的完全同源（下面两个函数），不做第二套口径。 */
+
+function openExpEditModal(id) {
+  const e = findExp(id);
+  if (!e) return;
+  const kinds = EXP_KINDS.map(function (k) {
+    return '<option value="' + k.v + '"' + (k.v === e.kind ? ' selected' : '') + '>' + k.label + '</option>';
+  }).join('');
+  openModal('编辑经历', '这几栏就是官网分段表单里要填的：组织 / 角色 / 类别 / 起止',
+    '<div class="field"><label>经历名称</label><input id="expName" value="' + esc(e.name) + '"></div>' +
+    '<div class="field"><label>组织（公司 / 院校 / 实验室）</label><input id="expOrg" value="' + esc(e.org) + '" placeholder="如：京东健康"></div>' +
+    '<div class="field"><label>角色</label><input id="expRole" value="' + esc(e.role) + '" placeholder="如：算法实习生"></div>' +
+    '<div class="field"><label>类别</label><select id="expKind">' + kinds + '</select></div>' +
+    '<div class="row" style="gap:10px;flex-wrap:nowrap"><div class="field" style="flex:1"><label>开始</label>' +
+      '<input type="text" readonly class="mp-in" id="expStart" aria-label="经历开始月份" placeholder="开始月份" value="' + esc(ymNorm(e.start)) + '"></div>' +
+    '<div class="field" style="flex:1"><label>结束</label>' +
+      '<input type="text" readonly class="mp-in" id="expEnd" aria-label="经历结束月份" placeholder="结束月份" value="' + esc(ymNorm(e.end)) + '"></div></div>' +
+    '<div class="hint">类别决定它进官网哪一栏：工作经历 → 官网的工作经历栏，项目经历 → 官网的项目（科研）经历栏。时间从下拉里选，只精确到月。</div>' +
+    '<div id="expKids"></div>',
+    [
+      { label: '取消', cls: 'btn', act: closeModal },
+      { label: '保存', cls: 'btn primary', act: function () {
+        updateExperience(id, {
+          name: ($('#expName') || {}).value || '',
+          org: ($('#expOrg') || {}).value || '',
+          role: ($('#expRole') || {}).value || '',
+          kind: ($('#expKind') || {}).value || 'proj',
+          start: ($('#expStart') || {}).value || '',
+          end: ($('#expEnd') || {}).value || ''
+        });
+        closeModal(); renderInventory();
+        toast('经历已更新', '经历');
+      } }
+    ]);
+  /* 弹窗打开后再画成就清单：此时 #expKids 才在 DOM 里 */
+  paintExpKids(id, '');
+  /* 弹窗里的月份框是新插进 DOM 的，而 bindMonthPickers 只认当时存在的那些 → 补绑一次
+     （函数内有 __mpBound 守卫，重复调用是安全的） */
+  bindMonthPickers();
+}
+
+function openExpDelModal(id) {
+  const e = findExp(id);
+  if (!e) return;
+  const n = expsOf(id).length;
+  openModal('删除这段经历？', expDisplayName(e),
+    '<div class="notice warn">这段经历名下还有 <b>' + n + '</b> 条成就，会一起删掉。' +
+    (n ? '这些是你记录过的真实经历，删了就没了。' : '') + '</div>',
+    [
+      { label: '取消', cls: 'btn', act: closeModal },
+      { label: '删除', cls: 'btn primary', act: function () {
+        removeExperience(id); closeModal(); renderInventory(); updateSideInfo();
+        toast('已删除这段经历' + (n ? '（连同 ' + n + ' 条成就）' : ''), '经历');
+      } }
+    ]);
+}
+
+function openExpMgrModal() {
+  const exps = state.experiences || [];
+  if (!exps.length) {
+    openModal('管理经历', '',
+      '<div class="hint">还没有记录经历。到「简历画像」页点「从简历自动归纳」一键生成，或在成就仓库里手动添加。</div>',
+      [
+        { label: '关闭', cls: 'btn', act: closeModal },
+        { label: '去简历画像', cls: 'btn primary', act: function () { closeModal(); switchView('resume'); } }
+      ]);
+    return;
+  }
+  const rows = exps.map(function (e) {
+    const mine = expsOf(e.id);
+    const sub = [e.org, e.role, joinTimeRange(e.start, e.end)].filter(Boolean).map(function (x) { return esc(x); }).join(' · ');
+    return '<div class="qm-row"><div class="qm-main"><div class="qm-name">' + esc(expDisplayName(e)) +
+      '<span class="inv-kind">' + esc(expKindLabel(e.kind)) + '</span></div>' +
+      (sub ? '<div class="qm-sub">' + sub + '</div>' : '') +
+      '<div class="qm-sub">名下 ' + mine.length + ' 条成就</div></div>' +
+      '<div class="qm-acts"><button class="btn sm" data-qm-exp-edit="' + e.id + '">编辑</button>' +
+      '<button class="btn sm" data-qm-exp-del="' + e.id + '">删除</button></div></div>';
+  }).join('');
+  openModal('管理经历', '共 ' + exps.length + ' 段经历 · 这几栏就是官网分段表单要填的内容', rows,
+    [{ label: '关闭', cls: 'btn', act: closeModal }]);
+  document.querySelectorAll('[data-qm-exp-edit]').forEach(function (b) {
+    b.onclick = function () { openExpEditModal(b.getAttribute('data-qm-exp-edit')); };
+  });
+  document.querySelectorAll('[data-qm-exp-del]').forEach(function (b) {
+    b.onclick = function () { openExpDelModal(b.getAttribute('data-qm-exp-del')); };
+  });
+}
+
+function openAchMgrModal() {
+  const items = state.inventory || [];
+  const exps = state.experiences || [];
+  if (!items.length) {
+    openModal('管理成就', '',
+      '<div class="hint">还没有记录成就。到「简历画像」页点「从简历自动归纳」一键生成，或在成就仓库里手动添加 —— 成果数字是选填的。</div>',
+      [
+        { label: '关闭', cls: 'btn', act: closeModal },
+        { label: '去简历画像', cls: 'btn primary', act: function () { closeModal(); switchView('resume'); } }
+      ]);
+    return;
+  }
+  const expName = function (it) {
+    const e = exps.find(function (x) { return x.id === it.expId; });
+    return e ? expDisplayName(e) : (it.project || '未分组');
+  };
+  const rows = items.map(function (it) {
+    const bits = [];
+    if (it.metric && /\d/.test(it.metric)) bits.push('<b>数字：</b>' + esc(it.metric));
+    if (it.impact) bits.push('<b>影响：</b>' + esc(it.impact));
+    return '<div class="qm-row"><div class="qm-main"><div class="qm-name">' + esc(it.action || '（没写做了什么）') + '</div>' +
+      '<div class="qm-sub">' + esc(expName(it)) + (it.time ? ' · ' + esc(it.time) : '') + '</div>' +
+      (bits.length ? '<div class="qm-sub">' + bits.join('　') + '</div>' : '') + '</div>' +
+      '<div class="qm-acts"><button class="btn sm" data-qm-inv-edit="' + it.id + '">编辑</button>' +
+      '<button class="btn sm" data-qm-inv-del="' + it.id + '">删除</button></div></div>';
+  }).join('');
+  openModal('管理成就', '共 ' + items.length + ' 条成就 · 成就是简历改写的原料，删前想清楚', rows,
+    [{ label: '关闭', cls: 'btn', act: closeModal }]);
+  document.querySelectorAll('[data-qm-inv-edit]').forEach(function (b) {
+    b.onclick = function () {
+      const id = b.getAttribute('data-qm-inv-edit');
+      const it = (state.inventory || []).find(function (x) { return x.id === id; });
+      if (!it) return;
+      openModal('编辑成就', expName(it),
+        '<div class="field"><label>做了什么</label><input id="qmInvAction" value="' + esc(it.action || '') + '"></div>' +
+        '<div class="field"><label>成果数字（选填）</label><input id="qmInvMetric" value="' + esc(it.metric || '') + '" placeholder="如：覆盖率提升 12%"></div>' +
+        '<div class="field"><label>影响（选填）</label><input id="qmInvImpact" value="' + esc(it.impact || '') + '"></div>' +
+        '<div class="hint">简历改写只拼装这里的原文 —— 成就写得越实，改出来的简历越有底气。</div>',
+        [
+          { label: '取消', cls: 'btn', act: closeModal },
+          { label: '保存', cls: 'btn primary', act: function () {
+            it.action = ($('#qmInvAction') || {}).value || '';
+            it.metric = ($('#qmInvMetric') || {}).value || '';
+            it.impact = ($('#qmInvImpact') || {}).value || '';
+            save(); renderInventory(); closeModal();
+            toast('成就已更新', '成就');
+          } }
+        ]);
+    };
+  });
+  document.querySelectorAll('[data-qm-inv-del]').forEach(function (b) {
+    b.onclick = function () {
+      const id = b.getAttribute('data-qm-inv-del');
+      const it = (state.inventory || []).find(function (x) { return x.id === id; });
+      if (!it) return;
+      openModal('删除这条成就？', it.action || '',
+        '<div class="notice warn">删除后不可恢复。如果它正被简历改写用着，改写会少一条素材。</div>',
+        [
+          { label: '取消', cls: 'btn', act: closeModal },
+          { label: '删除', cls: 'btn primary', act: function () {
+            state.inventory = (state.inventory || []).filter(function (x) { return x.id !== id; });
+            save(); renderInventory(); updateSideInfo(); closeModal();
+            toast('已删除这条成就', '成就');
+          } }
+        ]);
+    };
+  });
+}
+
+function openAppMgrModal() {
+  const apps = state.applications || [];
+  if (!apps.length) {
+    openModal('管理登记', '',
+      '<div class="hint">还没有登记。投递都在官网发生 —— 在投递中心点公司的官网入口提交后，回来「登记」一次，这里就有得管了。</div>',
+      [
+        { label: '关闭', cls: 'btn', act: closeModal },
+        { label: '去投递中心', cls: 'btn primary', act: function () { closeModal(); switchView('track'); } }
+      ]);
+    return;
+  }
+  const rows = apps.map(function (a) {
+    const st = a.closed ? '已结束' : (a.status || '进行中');
+    const sub = ['状态：' + st, a.receipt && a.receipt.no ? '回执 ' + a.receipt.no : ''].filter(Boolean).join(' · ');
+    return '<div class="qm-row"><div class="qm-main"><div class="qm-name">' + esc(a.company || '（未填公司）') +
+      ' · ' + esc(a.position || '') + '</div>' +
+      '<div class="qm-sub">' + esc(sub) + '</div></div>' +
+      '<div class="qm-acts"><button class="btn sm" data-qm-app-open="' + a.id + '">看流程</button>' +
+      '<button class="btn sm" data-qm-app-del="' + a.id + '">删除</button></div></div>';
+  }).join('');
+  openModal('管理登记', '共 ' + apps.length + ' 条登记 · 状态在投递中心按各家公司流程归档，这里用来快速清理误登记的条目', rows,
+    [{ label: '关闭', cls: 'btn', act: closeModal }]);
+  document.querySelectorAll('[data-qm-app-open]').forEach(function (b) {
+    b.onclick = function () { closeModal(); switchView('track'); };
+  });
+  document.querySelectorAll('[data-qm-app-del]').forEach(function (b) {
+    b.onclick = function () {
+      const id = b.getAttribute('data-qm-app-del');
+      const a = (state.applications || []).find(function (x) { return x.id === id; });
+      if (!a) return;
+      openModal('删除这条登记？', a.company + ' · ' + a.position,
+        '<div class="notice warn">只删这里的登记记录，不影响你在官网的投递。删除后不可恢复。</div>',
+        [
+          { label: '取消', cls: 'btn', act: closeModal },
+          { label: '删除', cls: 'btn primary', act: function () {
+            state.applications = (state.applications || []).filter(function (x) { return x.id !== id; });
+            save(); renderTrack(); renderJobs(); updateSideInfo(); closeModal();
+            toast('已删除这条登记（官网投递不受影响）', '投递中心');
+          } }
+        ]);
+    };
+  });
+}
+
 function renderInventory() {
   const root = document.getElementById('invList');
   if (!root) return;
@@ -6526,63 +6740,10 @@ function bindInventory() {
     };
   });
   document.querySelectorAll('[data-exp-edit]').forEach(function (b) {
-    b.onclick = function () {
-      const id = b.getAttribute('data-exp-edit');
-      const e = findExp(id);
-      if (!e) return;
-      const kinds = EXP_KINDS.map(function (k) {
-        return '<option value="' + k.v + '"' + (k.v === e.kind ? ' selected' : '') + '>' + k.label + '</option>';
-      }).join('');
-      openModal('编辑经历', '这几栏就是官网分段表单里要填的：组织 / 角色 / 类别 / 起止',
-        '<div class="field"><label>经历名称</label><input id="expName" value="' + esc(e.name) + '"></div>' +
-        '<div class="field"><label>组织（公司 / 院校 / 实验室）</label><input id="expOrg" value="' + esc(e.org) + '" placeholder="如：京东健康"></div>' +
-        '<div class="field"><label>角色</label><input id="expRole" value="' + esc(e.role) + '" placeholder="如：算法实习生"></div>' +
-        '<div class="field"><label>类别</label><select id="expKind">' + kinds + '</select></div>' +
-        '<div class="row" style="gap:10px;flex-wrap:nowrap"><div class="field" style="flex:1"><label>开始</label>' +
-          '<input type="text" readonly class="mp-in" id="expStart" aria-label="经历开始月份" placeholder="开始月份" value="' + esc(ymNorm(e.start)) + '"></div>' +
-        '<div class="field" style="flex:1"><label>结束</label>' +
-          '<input type="text" readonly class="mp-in" id="expEnd" aria-label="经历结束月份" placeholder="结束月份" value="' + esc(ymNorm(e.end)) + '"></div></div>' +
-        '<div class="hint">类别决定它进官网哪一栏：工作经历 → 官网的工作经历栏，项目经历 → 官网的项目（科研）经历栏。时间从下拉里选，只精确到月。</div>' +
-        '<div id="expKids"></div>',
-        [
-          { label: '取消', cls: 'btn', act: closeModal },
-          { label: '保存', cls: 'btn primary', act: function () {
-            updateExperience(id, {
-              name: ($('#expName') || {}).value || '',
-              org: ($('#expOrg') || {}).value || '',
-              role: ($('#expRole') || {}).value || '',
-              kind: ($('#expKind') || {}).value || 'proj',
-              start: ($('#expStart') || {}).value || '',
-              end: ($('#expEnd') || {}).value || ''
-            });
-            closeModal(); renderInventory();
-            toast('经历已更新', '经历');
-          } }
-        ]);
-      /* 弹窗打开后再画成就清单：此时 #expKids 才在 DOM 里 */
-      paintExpKids(id, '');
-      /* 弹窗里的月份框是新插进 DOM 的，而 bindMonthPickers 只认当时存在的那些 → 补绑一次
-         （函数内有 __mpBound 守卫，重复调用是安全的） */
-      bindMonthPickers();
-    };
+    b.onclick = function () { openExpEditModal(b.getAttribute('data-exp-edit')); };
   });
   document.querySelectorAll('[data-exp-del]').forEach(function (b) {
-    b.onclick = function () {
-      const id = b.getAttribute('data-exp-del');
-      const e = findExp(id);
-      if (!e) return;
-      const n = expsOf(id).length;
-      openModal('删除这段经历？', expDisplayName(e),
-        '<div class="notice warn">这段经历名下还有 <b>' + n + '</b> 条成就，会一起删掉。' +
-        (n ? '这些是你记录过的真实经历，删了就没了。' : '') + '</div>',
-        [
-          { label: '取消', cls: 'btn', act: closeModal },
-          { label: '删除', cls: 'btn primary', act: function () {
-            removeExperience(id); closeModal(); renderInventory();
-            toast('已删除这段经历' + (n ? '（连同 ' + n + ' 条成就）' : ''), '经历');
-          } }
-        ]);
-    };
+    b.onclick = function () { openExpDelModal(b.getAttribute('data-exp-del')); };
   });
   document.querySelectorAll('[data-inv-pick]').forEach(function (b) {
     b.onclick = function () {
@@ -7297,8 +7458,13 @@ function init() {
   /* 「第四十轮」资料卡可点击 → 跳资料编辑；速览面板的指南按钮 */
   const spChip = document.getElementById('sideProfile');
   if (spChip) { spChip.title = '点击修改个人资料'; spChip.onclick = function () { switchView('resume'); }; }
-  const siG = document.getElementById('siGuide');
-  if (siG) siG.onclick = function () { openHelpModal(); };
+  /* 「第四十一轮」速览三个数字可点击 → 独立管理弹窗；「查看使用指南」按钮已删（与下方使用指南重复） */
+  const siEB = document.getElementById('siExpBtn');
+  if (siEB) siEB.onclick = function () { openExpMgrModal(); };
+  const siAB = document.getElementById('siAchBtn');
+  if (siAB) siAB.onclick = function () { openAchMgrModal(); };
+  const siRB = document.getElementById('siAppBtn');
+  if (siRB) siRB.onclick = function () { openAppMgrModal(); };
   $('#resetAll').addEventListener('click', function () {
     openModal('清空本地数据', '将删除浏览器中保存的简历画像、偏好与投递记录', '<div class="hint">此操作不可撤销。清空后需要重新导入简历。</div>', [
       { label: '取消', cls: 'btn', act: closeModal },
