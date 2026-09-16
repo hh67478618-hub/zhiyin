@@ -1155,7 +1155,10 @@ function runNowcoderReproSuite() {
             JSON.stringify(rD.notice));
           winD.close();
 
-          /* 场景 E（第四十二轮）：名称栏全空 + 两块两条 → 拒绝按页序盲配并给出指引。 */
+          /* 场景 E（第四十三轮反转）：名称栏全空 + 块里也没存过时间 = 全新表单，
+             没有任何身份证据 —— 块数与条数相等时按组内顺序配，名称和时间一起落位。
+             （第四十二轮的一律拒配被用户实测打回：日期直接填不上。）
+             真歧义（名称栏有内容但对不上）的拒配移到场景 E2。 */
           const winE = new JSDOM('<!DOCTYPE html><html><head><title>在线简历</title></head><body>' + nkWorkBlock('w0') + nkWorkBlock('w1') + '</body></html>',
             { url: 'https://www.nowcoder.com/profile', runScripts: 'outside-only' });
           winE.window.eval(src);
@@ -1163,13 +1166,35 @@ function runNowcoderReproSuite() {
           return winE.window.fillComboFields({ fields: {}, sections: { work: NK_WORKS } }).then(function (rE) {
             const v5 = {};
             winE.window.document.querySelectorAll('[data-t]').forEach(function (el) { v5[el.dataset.t] = el.value; });
-            ok('歧义拒配：两块两条名称全空 → 起止时间一律不代填（宁可漏填不填错）',
-              v5.w0Start === '' && v5.w1Start === '' && v5.w1End === '',
+            ok('空白等数配对：全新表单两块两条 → 时间按顺序落位（京东健康 w0 / 深圳海关 w1）',
+              v5.w0Start === '2025-11' && v5.w0End === '2026-01' && v5.w1Start === '2024-05' && v5.w1End === '2025-07',
               JSON.stringify(v5));
-            ok('歧义拒配：notice 说明原因并指引「先补名称再点一次」',
-              (rE.notice || []).some(function (n) { return /名称栏/.test(String(n)); }),
+            ok('空白等数配对：职位名称也按同一配对落位（每块内部自洽）',
+              v5.w0Role === '产品运营实习生' && v5.w1Role === '口腔科实习生',
+              JSON.stringify({ r0: v5.w0Role, r1: v5.w1Role }));
+            ok('空白等数配对：不再出「对不上号」的拒配提示',
+              !(rE.notice || []).some(function (n) { return /对不上/.test(String(n)); }),
               JSON.stringify(rE.notice));
             winE.window.close();
+
+            /* 场景 E2（第四十三轮）：名称栏「有内容」但和资料对不上 = 真歧义，
+               仍然拒配 —— 宁可漏填不填错（保护 42 轮战果）。 */
+            const winE2 = new JSDOM('<!DOCTYPE html><html><head><title>在线简历</title></head><body>' + nkWorkBlock('w0') + nkWorkBlock('w1') + '</body></html>',
+              { url: 'https://www.nowcoder.com/profile', runScripts: 'outside-only' });
+            winE2.window.eval(src);
+            mockMtdPicker(winE2.window);
+            winE2.window.document.querySelector('[data-t="w0Role"]').value = '某创业公司运营';
+            winE2.window.document.querySelector('[data-t="w1Role"]').value = '另一家科技实习';
+            return winE2.window.fillComboFields({ fields: {}, sections: { work: NK_WORKS } }).then(function (rE2) {
+              const v5b = {};
+              winE2.window.document.querySelectorAll('[data-t]').forEach(function (el) { v5b[el.dataset.t] = el.value; });
+              ok('真歧义拒配：名称栏有内容但对不上 → 起止时间仍不代填',
+                v5b.w0Start === '' && v5b.w1Start === '',
+                JSON.stringify({ s0: v5b.w0Start, s1: v5b.w1Start }));
+              ok('真歧义拒配：notice 说明「名称栏有内容但对不上」',
+                (rE2.notice || []).some(function (n) { return /对不上/.test(String(n)); }),
+                JSON.stringify(rE2.notice));
+              winE2.window.close();
 
             /* 场景 F（第四十二轮）：名称栏读不到（检索组件），但块里已保存的时间能对上号
                → 按时间证据配对，DOM 顺序与载荷相反也不串。 */
@@ -1190,12 +1215,40 @@ function runNowcoderReproSuite() {
                 v6.w1Start === '2025-11' && v6.w1End === '2026-01',
                 JSON.stringify({ s: v6.w1Start, e: v6.w1End }));
               winF.window.close();
+
+              /* 场景 H（第四十三轮）：全新页面没有经历段块 → autoAddSections 自动点
+                 「添加工作经历」补出块，第二遍接着把名称和时间填进去（一次粘贴全搞定）。 */
+              const winH = new JSDOM('<!DOCTYPE html><html><head><title>申请表</title></head><body>' +
+                '<button id="addWork" type="button">+ 添加工作经历</button><div id="root"></div></body></html>',
+                { url: 'https://careers.example.com/apply', runScripts: 'outside-only' });
+              winH.window.eval(src);
+              mockMtdPicker(winH.window);
+              let hn = 0;
+              winH.window.document.getElementById('addWork').addEventListener('click', function () {
+                winH.window.document.getElementById('root').insertAdjacentHTML('beforeend', nkWorkBlock('hw' + (hn++)));
+              });
+              return winH.window.autoAddSections({ sections: { work: NK_WORKS } }).then(function (rH0) {
+                ok('自动补段：按载荷需要点了 2 次「添加工作经历」，页面多出 2 个工作段块',
+                  !!rH0.ok && rH0.added.work === 2 &&
+                  !!winH.window.document.querySelector('[data-t="hw0Start"]') &&
+                  !!winH.window.document.querySelector('[data-t="hw1Start"]'),
+                  JSON.stringify(rH0));
+                return winH.window.fillComboFields({ fields: {}, sections: { work: NK_WORKS } }).then(function (rH) {
+                  const v7 = {};
+                  winH.window.document.querySelectorAll('[data-t]').forEach(function (el) { v7[el.dataset.t] = el.value; });
+                  ok('自动补段：补出的块照常按顺序填上时间（一次粘贴全搞定）',
+                    v7.hw0Start === '2025-11' && v7.hw0End === '2026-01' && v7.hw1Start === '2024-05' && v7.hw1End === '2025-07',
+                    JSON.stringify({ s0: v7.hw0Start, e0: v7.hw0End, s1: v7.hw1Start, e1: v7.hw1End }));
+                  winH.window.close();
+                });
+              });
             });
           });
         });
       });
     });
   });
+});
 }
 
 /* ============================================================
@@ -1728,7 +1781,7 @@ ok('popup：injectBundle 会验一次注入结果并报明原因（真机上失�
   popupSrc24.indexOf("typeof scanForm === 'function'") >= 0 &&
   popupSrc24.indexOf('扩展脚本没能注入这一页') >= 0);
 (function () {
-  const names = ['collectFromPage', 'collectReceipt', 'fillFromPayload', 'fillComboFields', 'probeForm', 'collectJobs', 'collectPrograms'];
+  const names = ['collectFromPage', 'collectReceipt', 'fillFromPayload', 'fillComboFields', 'autoAddSections', 'probeForm', 'collectJobs', 'collectPrograms'];
   const bad = [];
   names.forEach(function (n) {
     const i = popupSrc24.indexOf('func: ' + n + ',');

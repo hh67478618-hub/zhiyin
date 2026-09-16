@@ -277,6 +277,20 @@ async function fillCurrentPage() {
   });
   const r = injected && injected[0] ? injected[0].result : null;
 
+  /* 第 2.5 遍（第四十三轮）：页面上经历段块不够时，自动点「添加经历」按钮补齐。
+     用户实测：第一次在全新申请表页只有姓名邮箱被填上，得手动添加每段经历再粘一遍。
+     现在由扩展代劳：按载荷需要的段数补块（找不到按钮就跳过，不硬来）。 */
+  let addedInfo = null;
+  try {
+    await injectBundle(tab.id);
+    const injA = await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      func: autoAddSections,
+      args: [{ sections: payload.sections || null }]
+    });
+    addedInfo = injA && injA[0] ? injA[0].result : null;
+  } catch (e) { addedInfo = null; }
+
   /* 第二遍：检索型下拉 + 日期选择器（异步）。
      公司名称 / 学校名称 / 起止时间这类栏是受控的搜索组件，写 value 无效，
      必须"点开 → 逐字输入 → 等选项 → 点中"，天然是异步的，所以单开一遍。

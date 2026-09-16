@@ -1715,13 +1715,31 @@ function fillComboFields(opts) {
     var rest = pr.rest.slice();
     var unmatchedB = [];
     expBlocks.forEach(function (b, bi) { if (assign[bi] == null || assign[bi] < 0) unmatchedB.push(bi); });
+    /* 空白块（名字读不到、块里也没存过时间）＝全新表单，没有任何身份证据。
+       第四十三轮：这类块在「块数 == 剩余条数」时按组内顺序配 ——
+       第四十二轮的一律拒配被用户实测打回：「日期直接填不上」。
+       全新表单上顺序是唯一可用的信号，且名称（检索栏）和时间在同一次配对里
+       一起落位，每块内部永远自洽。真正危险的是「有身份证据但对不上」的块
+       （名称栏有内容、和资料对不上）—— 那种仍然拒配。 */
+    function blankBlock(bi) {
+      var b = expBlocks[bi];
+      if (b.anchor) return false;
+      var dv = dateVals(b);
+      return !dv.s && !dv.e;
+    }
+    var blankU = unmatchedB.filter(blankBlock);
     var refused = false;
-    if (unmatchedB.length === 1 && rest.length === 1) {
-      assign[unmatchedB[0]] = rest[0];
-    } else if (unmatchedB.length > 0) {
+    if (blankU.length > 0 && blankU.length === rest.length) {
+      blankU.forEach(function (bi, k) { assign[bi] = rest[k]; });
+      rest = [];
+    }
+    var hardU = unmatchedB.filter(function (bi) { return assign[bi] == null || assign[bi] < 0; });
+    if (hardU.length === 1 && rest.length === 1) {
+      assign[hardU[0]] = rest[0];   /* 恰好剩一块 × 恰好剩一条：没有别的可能，代配（42 轮口径保留） */
+    } else if (hardU.length > 0) {
       refused = true;
-      results.notice.push('有 ' + unmatchedB.length + ' 段的名称栏在页面上是空的（和这次的资料也对不上），判断不了每段对应哪条经历 —— 起止时间没有代填。请先把公司 / 项目名选好，再点一次「辅助填写」，时间会按名字对号入座');
-      unmatchedB.forEach(function (bi) { assign[bi] = -1; });
+      results.notice.push('有 ' + hardU.length + ' 段的名称栏在页面上有内容、但和这次的资料对不上，判断不了对应哪条经历 —— 这几段的起止时间没有代填。请核对页面上已选的公司 / 项目名，再点一次「辅助填写」，其余各段会照常填上');
+      hardU.forEach(function (bi) { assign[bi] = -1; });
     }
     expBlocks.forEach(function (b, bi) {
       var ei = assign[bi];
@@ -2548,4 +2566,97 @@ function probeForm() {
   };
 }
 
-if (typeof module !== 'undefined' && module.exports) { module.exports = { collectFromPage: collectFromPage, collectReceipt: collectReceipt, collectJobs: collectJobs, fillFromPayload: fillFromPayload, fillComboFields: fillComboFields, probeForm: probeForm, collectPrograms: collectPrograms }; }
+/* autoAddSections(opts) —— 页面上经历段块不够时，自动点「添加经历」按钮补齐。
+   用户实测（第四十三轮）：第一次在全新申请表页点辅助填写，页面上还没有工作 / 项目
+   经历的段落块，第二遍无处可填，只能填姓名邮箱 —— 用户被迫手动添加每段经历、
+   再粘贴一遍。现在由扩展代劳：
+     ① 按载荷统计每组（工作 / 项目 /教育）需要几个块、页面上已有几个；
+     ② 找「添加工作经历 / 新增项目经历 / 添加教育背景」这类按钮（中英文口径），
+        优先最内层的可点元素（外层容器往往也带同样文案，点了没反应）；
+     ③ 用完整指针序列真点，轮询等块数真的增加（250ms × 12 次，中途补点一次），
+        点不出来就放弃这一组 —— 后续按「表单不在这页」如实报告，绝不硬点。
+   返回 { ok, added: { work, proj, edu } }，由编排层并进提示。 */
+function autoAddSections(opts) {
+  var o = opts || {};
+  var doc = (typeof document !== 'undefined') ? document : null;
+  if (!doc) return Promise.resolve({ ok: false, error: 'no document' });
+  function clean(s) { return String(s == null ? '' : s).replace(/[\s\u00a0]+/g, ' ').trim(); }
+  var sec = o.sections || null;
+  var need = {};
+  if (sec) {
+    if (sec.work && sec.work.length) need.work = sec.work.length;
+    if (sec.projects && sec.projects.length) need.proj = sec.projects.length;
+    if (sec.education && sec.education.length) need.edu = sec.education.length;
+  }
+  var ADD_PATS = [
+    ['work', /添加(一?段)?(工作|实习)经历|新增(工作|实习)经历|add\s+(an?\s+)?(work|employment|internship)/i],
+    ['proj', /添加(一?段)?项目经历|新增项目经历|add\s+(an?\s+)?project/i],
+    ['edu', /添加教育(经历|背景)|新增教育|add\s+(an?\s+)?education/i]
+  ];
+  function countBlocks(sect) {
+    var scan = scanForm(doc), seen = {}, n = 0;
+    scan.forEach(function (x) { if (x.sect === sect && !seen[x.block]) { seen[x.block] = 1; n++; } });
+    return n;
+  }
+  function findAddButton(sect) {
+    var pat = null;
+    ADD_PATS.forEach(function (p) { if (p[0] === sect) pat = p[1]; });
+    if (!pat) return null;
+    var hits = [];
+    var els = doc.querySelectorAll('button, a, [role="button"], span, div');
+    for (var i = 0; i < els.length; i++) {
+      var el = els[i];
+      if (el.children && el.children.length > 3) continue;   /* 粗粒度容器不点 */
+      var t = clean(el.textContent);
+      if (!t || t.length > 30 || !pat.test(t)) continue;
+      hits.push(el);
+      if (hits.length >= 8) break;
+    }
+    /* 只留最内层的命中：外层 div 往往把按钮文案包在里面，点它没反应 */
+    var inner = hits.filter(function (el) {
+      return !hits.some(function (other) { return other !== el && el.contains(other); });
+    });
+    return inner[0] || hits[0] || null;
+  }
+  function mouse(el, type) {
+    var ex = { bubbles: true, cancelable: true, view: window, button: 0 };
+    try { el.dispatchEvent(new window.MouseEvent(type, ex)); } catch (e) {
+      try { el.dispatchEvent(new window.Event(type, { bubbles: true })); } catch (e2) { /* 忽略 */ }
+    }
+  }
+  function realClick(el) {
+    if (!el) return;
+    mouse(el, 'pointerdown'); mouse(el, 'mousedown');
+    mouse(el, 'pointerup'); mouse(el, 'mouseup'); mouse(el, 'click');
+    if (typeof el.focus === 'function') { try { el.focus(); } catch (e) { /* 忽略 */ } }
+  }
+  return new Promise(function (resolve) {
+    var added = { work: 0, proj: 0, edu: 0 };
+    var queue = [];
+    Object.keys(need).forEach(function (sect) {
+      var have = countBlocks(sect), wantN = need[sect];
+      for (var k = have; k < wantN; k++) queue.push(sect);
+    });
+    if (!queue.length) return resolve({ ok: true, added: added });
+    function step() {
+      if (!queue.length) return resolve({ ok: true, added: added });
+      var sect = queue.shift();
+      var before = countBlocks(sect);
+      var btn = findAddButton(sect);
+      if (!btn) return step();   /* 找不到按钮：不硬来，缺的让第二遍如实报告 */
+      realClick(btn);
+      var tries = 0;
+      (function poll() {
+        setTimeout(function () {
+          tries++;
+          if (countBlocks(sect) > before) { added[sect]++; return step(); }
+          if (tries >= 12) return step();   /* 点了没出块：放弃这一组 */
+          if (tries === 6) realClick(btn);  /* 中途补点一次 */
+          poll();
+        }, 250);
+      })();
+    }
+    step();
+  });
+}
+if (typeof module !== 'undefined' && module.exports) { module.exports = { collectFromPage: collectFromPage, collectReceipt: collectReceipt, collectJobs: collectJobs, fillFromPayload: fillFromPayload, fillComboFields: fillComboFields, autoAddSections: autoAddSections, probeForm: probeForm, collectPrograms: collectPrograms }; }
