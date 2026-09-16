@@ -5665,7 +5665,9 @@ function resumeHeadingKey(line) {
 function unwrapResumeLines(text) {
   const lines = String(text == null ? '' : text).split(/\r?\n/);
   const out = [];
-  const STARTS_ENTRY = /^([·•●◦*▪‧∙・]|\d{1,2}[.、)])/;
+  /* 第五十二轮补：连字符要点（「- 负责xx」，破折号同理）也要拦住不拼 ——
+     否则上一行没写句读时，下一行的要点行会被胶进上一行里。 */
+  const STARTS_ENTRY = /^(?:[·•●◦*▪‧∙・○▶➢➤◆※✦▸►]|[-–—]\s|\d{1,2}[.、)])/;
   const HAS_DATE = /(19|20)\d{2}\s*[.\/\-年]\s*\d{1,2}/;
   /* 行尾标点 = 这句话写完了。半角句点也算 —— 漏掉它会让英文要点
      （"…competitor report."）把下一行的经历名吸进来（第二十二轮修）。 */
@@ -5681,6 +5683,10 @@ function unwrapResumeLines(text) {
        （25 字）后面的日期会被胶上来，整段标题就散了（第二十二轮修）。 */
     if (HAS_DATE.test(line) && /^[\d.\-\/年月日\s–—~至]+$/.test(line)) return /[-–—~至]\s*$/.test(prev);
     if (HAS_DATE.test(line)) return false;            /* 带时间的新条目 */
+    /* 第五十二轮补：上一行是「已带完整起止时间」的标题行（公司 岗位 2025.06 - 2025.09）时，
+       它本身已经写完了 —— 下面的正文行（哪怕没带句读）不该被胶进标题里，
+       否则正文整句会被并进经历名，归纳出一条名字是半句话的假经历。 */
+    if (HAS_DATE.test(prev) && /(\d{1,2}\s*月?|至今|现在|present)\s*$/i.test(prev)) return false;
     if (NEW_ITEM.test(line)) return false;            /* 论文 / 获奖这类独立条目 */
     if (resumeHeadingKey(prev)) return false;
     if (ENDS_OK.test(prev)) return false;             /* 上一行已经写完 */
@@ -6927,12 +6933,26 @@ function parseExperienceBlocks(text) {
       return;
     }
     /* 编号限 1-2 位数字：\d+[.、)] 会把「2024.03 - …」日期标题行误判成要点。
-       要点符号补全角中点・（U+30FB，很多简历导出用它）（第二十轮） */
-    const bm = line.match(/^([·•●◦*▪‧∙・]|\d{1,2}[.、)])\s*(.+)$/);
+       要点符号补全角中点・（U+30FB，很多简历导出用它）（第二十轮）。
+       第五十二轮补：连字符 / 长破折号后面跟空格也是常见要点写法（「- 负责xx」）。 */
+    const bm = line.match(/^(?:[·•●◦*▪‧∙・○▶➢➤◆※✦▸►]|\d{1,2}[.、)]|[-–—]\s)\s*(.+)$/);
     if (bm) {
       if (!cur) { cur = { headerLines: [], bullets: [], sealed: false }; blocks.push(cur); }
-      cur.bullets.push(bm[2].trim());
+      cur.bullets.push(bm[1].trim());
       return;
+    }
+    /* 第五十二轮：要点/正文进行中的裸行 = 上一条漏了符号的续写，不是一段新经历。
+       ——「设计曝光 25%／深度参与 45%／转化 30% 加权模型，压低转化权重以规避越权」
+       这类内容行此前会被当成新经历的标题行，整句单拎成一条假成就。
+       收编条件：当前块未封口、行内无日期、且长得像内容（带百分比数字，或动作动词开头）。
+       「名称：描述」型单行经历（封了口的块 / 空白起点）不受影响，约定不变。 */
+    if (cur && !cur.sealed && !HAS_DATE.test(line) && (cur.bullets.length || cur.headerLines.length)) {
+      const t = line.trim();
+      if (/\d+(?:\.\d+)?\s*%/.test(t)
+        || /^(搭建|负责|设计|开发|主导|参与|协助|优化|运营|撰写|策划|推动|落地|独立|通过|基于|利用|使用|结合|完成|产出|输出|管理|维护|分析|研究|支持|跟进|对接|协调|组织|制作|沉淀|梳理)/.test(t)) {
+        cur.bullets.push(t);
+        return;
+      }
     }
     /* 「名称：描述」且描述够长 = 单行自成一整段经历 → 立即封块，
        不与相邻行合并（否则两段单行经历会黏成一条）（第二十轮） */
