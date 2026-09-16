@@ -1240,6 +1240,47 @@ function runNowcoderReproSuite() {
                     v7.hw0Start === '2025-11' && v7.hw0End === '2026-01' && v7.hw1Start === '2024-05' && v7.hw1End === '2025-07',
                     JSON.stringify({ s0: v7.hw0Start, e0: v7.hw0End, s1: v7.hw1Start, e1: v7.hw1End }));
                   winH.window.close();
+                  return null;
+                }).then(function () {
+                  /* 场景 I（第四十四轮）：适配规则 zhiyin.adapt.v1 —— 规则命中的栏精确落位，
+                     标签认不出的栏也能填（自服务闭环：探测 → 任何 AI 生成规则 → 贴回扩展）。 */
+                  const winI = new JSDOM('<!DOCTYPE html><html><head><title>申请表</title></head><body>' +
+                    '<input id="weirdStart" data-t="weirdStart" placeholder="起止年月"></body></html>',
+                    { url: 'https://careers.example.com/apply2', runScripts: 'outside-only' });
+                  winI.window.eval(src);
+                  return winI.window.fillComboFields({
+                    fields: {},
+                    sections: { projects: [{ name: 'ICB 免疫疗法多组学数据库构建', time: '2026.01-2026.08' }] },
+                    adapt: { schema: 'zhiyin.adapt.v1', rules: [
+                      { sel: '#weirdStart', get: 'sections.projects.0.time', part: 'start', kind: 'date' },
+                      { sel: '#notExist', get: 'fields.email' }
+                    ] }
+                  }).then(function (rI) {
+                    const wv = winI.window.document.getElementById('weirdStart').value;
+                    ok('适配规则：选择器命中 + part:start 切出 2026.01 → 精确落位',
+                      wv === '2026.01' && (rI.filled || []).some(function (f) { return /projects\.0\.time/.test(String(f.field)); }),
+                      JSON.stringify({ v: wv, filled: rI.filled }));
+                    ok('适配规则：找不到元素的规则如实报 notice，不误填别处',
+                      (rI.notice || []).some(function (n) { return /找不到元素/.test(String(n)); }),
+                      JSON.stringify(rI.notice));
+                    winI.window.close();
+                  });
+                }).then(function () {
+                  /* 场景 J（第四十四轮）：「点了没出块」绝不能连点 —— 旧版每个名额中途补点一次，
+                     两个名额点 4 次，在扫描认不出新块的页面上堆出 4 段空白教育经历（用户实测）。
+                     新版：三级回退逐级升级；本组彻底失败就放弃剩余名额并如实报 undetected。 */
+                  const winJ = new JSDOM('<!DOCTYPE html><html><head><title>申请表</title></head><body>' +
+                    '<button id="addEdu" type="button">添加教育经历</button><div id="root"></div></body></html>',
+                    { url: 'https://careers.example.com/apply3', runScripts: 'outside-only' });
+                  winJ.window.eval(src);
+                  let clicks = 0;
+                  winJ.window.document.getElementById('addEdu').addEventListener('click', function () { clicks++; });
+                  return winJ.window.autoAddSections({ sections: { education: [{ school: '甲大学' }, { school: '乙大学' }] } }).then(function (rJ) {
+                    ok('防连点：点了没出块 → 只尝试一轮（1 次点击），本组剩余名额全部放弃',
+                      clicks === 1 && rJ.added.edu === 0 && (rJ.undetected || []).indexOf('edu') >= 0,
+                      JSON.stringify({ clicks: clicks, r: rJ }));
+                    winJ.window.close();
+                  });
                 });
               });
             });

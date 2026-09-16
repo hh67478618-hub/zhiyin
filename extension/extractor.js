@@ -1128,10 +1128,50 @@ function wrapperOf(el) {
   return null;
 }
 
+/* 第四十四轮：CSS 路径 + 游离节点重解析 + shadow DOM 穿透。
+   真实站点（React 等）在我们逐字输入、点面板的过程中会重渲染，计划阶段抓到的
+   元素引用会变成游离节点 —— 点击落在死节点上，时好时坏（用户实测日期偶尔才
+   填进一条）。每个控件扫描时存下 CSS 路径，执行前按路径重新解析。
+   deepQueryAll 顺带穿透 shadow root：有些官网的申请表整块挂在 shadow 里，
+   旧扫描一栏都看不见（用户实测「添加工作经历」永远找不到）。 */
+function cssPath(el) {
+  if (!el || el.nodeType !== 1) return '';
+  var parts = [], node = el, depth = 0;
+  while (node && node.nodeType === 1 && node !== (el.ownerDocument && el.ownerDocument.body) && depth < 8) {
+    var sel = node.tagName.toLowerCase();
+    if (node.id) { parts.unshift('#' + node.id); break; }
+    var sib = node, nth = 1;
+    while ((sib = sib.previousElementSibling)) { if (sib.tagName === node.tagName) nth++; }
+    sel += ':nth-of-type(' + nth + ')';
+    parts.unshift(sel);
+    node = node.parentElement; depth++;
+  }
+  return parts.join(' > ');
+}
+function reResolve(el, pathSel) {
+  if (el && el.isConnected) return el;
+  if (!pathSel) return el;
+  try { var fresh = document.querySelector(pathSel); return fresh || el; } catch (e) { return el; }
+}
+function deepQueryAll(root, selector) {
+  var out = [];
+  function walk(node) {
+    if (!node || !node.querySelectorAll) return;
+    try {
+      var els = node.querySelectorAll(selector);
+      for (var i = 0; i < els.length; i++) out.push(els[i]);
+      var all = node.querySelectorAll('*');
+      for (var j = 0; j < all.length; j++) { if (all[j].shadowRoot) walk(all[j].shadowRoot); }
+    } catch (e) { /* 忽略 */ }
+  }
+  walk(root);
+  return out;
+}
+
 /* 全表扫描：给每个可填控件算好标签 + 段号。
    段号 = 这一栏在同一栏目里是第几次出现（0 起）—— 多段经历所依赖的就是它。 */
 function scanForm(doc) {
-  var els = doc.querySelectorAll('input, textarea, select');
+  var els = deepQueryAll(doc, 'input, textarea, select');
   var list = [];
   for (var i = 0; i < els.length; i++) {
     var el = els[i];
@@ -1143,6 +1183,7 @@ function scanForm(doc) {
       el: el, i: i, tag: tag, type: type,
       label: lb.text, src: lb.src, rank: lb.rank, list: lb.list,
       wrap: wr ? wr.el : null, wrapSel: wr ? wr.sel : '',
+      pathSel: cssPath(el), wrapPath: wr ? cssPath(wr.el) : '',
       sect: '', block: 0, taken: false
     });
   }
@@ -1523,6 +1564,60 @@ function fillComboFields(opts) {
     if (val == null || clean(val) === '') return;
     var hit = pick(function (x) { return !!labelMatch(x, pats); });
     if (hit) jobs.push({ x: hit, field: key, value: String(val), date: !!isDate });
+  }
+
+  /* ---------- 适配规则（第四十四轮）：self-serve 精确落位 ----------
+     探测表单 → 复制结构 → 任何 AI 助手都能据此生成 zhiyin.adapt.v1 规则，
+     用户贴回扩展即可，不再依赖特定开发者。规则字段：
+       sel   —— 这一栏的 CSS 选择器；
+       get   —— 取值路径：fields.xxx 或 sections.work.0.time；
+       part  —— 取值是起止区间时取 'start' 或 'end'（可选）；
+       kind  —— 'date' / 'combo'（可选，缺省按只读与外壳推断）。
+     规则命中优先于一切模糊匹配（先进 jobs、标记 taken），普通栏已有值的不覆盖。 */
+  function resolveAdaptValue(path, part) {
+    if (!path) return null;
+    var cur = { fields: raw, sections: sec || {} };
+    var parts = String(path).replace(/\[(\d+)\]/g, '.$1').split('.');
+    for (var i = 0; i < parts.length; i++) {
+      if (cur == null) return null;
+      cur = cur[parts[i]];
+    }
+    var v = (cur == null ? '' : String(cur));
+    if (part && v) {
+      var rr = timeRange(v);
+      v = (part === 'start') ? rr[0] : rr[1];
+    }
+    return v;
+  }
+  var adaptRules = (o.adapt && o.adapt.rules) || [];
+  if (adaptRules.length) {
+    adaptRules.forEach(function (r) {
+      var el = null;
+      try { el = doc.querySelector(r.sel); } catch (e) { /* 非法选择器按没找到处理 */ }
+      if (!el) { results.notice.push('适配规则找不到元素：' + r.sel); return; }
+      var v = resolveAdaptValue(r.get, r.part);
+      if (v == null || clean(v) === '') { results.notice.push('适配规则取不到值：' + r.get); return; }
+      var x = null;
+      for (var i = 0; i < scan.length; i++) { if (scan[i].el === el) { x = scan[i]; break; } }
+      if (!x) {
+        var wr2 = wrapperOf(el);
+        x = { el: el, i: -1, tag: el.tagName.toLowerCase(), type: String(el.type || '').toLowerCase(),
+          label: String(r.get), src: 'adapt', rank: 0, list: [],
+          wrap: wr2 ? wr2.el : null, wrapSel: wr2 ? wr2.sel : '',
+          pathSel: cssPath(el), wrapPath: wr2 ? cssPath(wr2.el) : '',
+          sect: '', block: 0, taken: false };
+        scan.push(x);
+      }
+      if (x.taken) return;
+      if (!x.wrap && !x.el.readOnly && clean(x.el.value) !== '') {
+        results.notice.push('适配规则指向的栏已有内容，没有覆盖：' + r.sel);
+        return;
+      }
+      x.taken = true;
+      var kd = r.kind || ((x.el.readOnly || (x.wrap && /picker|date|calendar/i.test(String(x.wrap.className || '')))) ? 'date' : 'combo');
+      jobs.push({ x: x, field: String(r.get), value: String(v), date: kd === 'date' });
+    });
+    results.notice.push('本页生效 ' + adaptRules.length + ' 条适配规则（按规则精确落位）');
   }
 
   /* 单值检索型：院校 / 专业 / 学历 / 公司 / 职位 */
@@ -2234,7 +2329,11 @@ function fillComboFields(opts) {
   function runJob(idx) {
     if (idx >= jobs.length) return Promise.resolve();
     var job = jobs[idx];
-    var x = job.x, inner = x.el, wrap = x.wrap;
+    var x = job.x;
+    /* 第四十四轮：重渲染会让旧引用变游离节点 —— 执行前按扫描时存的路径重新解析 */
+    x.el = reResolve(x.el, x.pathSel);
+    if (x.wrap) x.wrap = reResolve(x.wrap, x.wrapPath);
+    var inner = x.el, wrap = x.wrap;
     var isDate = job.date || !!(wrap && /picker|date|calendar/i.test(String(wrap.className || '')));
     var next = function () { return runJob(idx + 1); };
     /* 未来时间防呆（第三十八轮）：开始时间落在未来，多半是段块对错了或这条经历
@@ -2589,9 +2688,11 @@ function autoAddSections(opts) {
     if (sec.education && sec.education.length) need.edu = sec.education.length;
   }
   var ADD_PATS = [
-    ['work', /添加(一?段)?(工作|实习)经历|新增(工作|实习)经历|add\s+(an?\s+)?(work|employment|internship)/i],
-    ['proj', /添加(一?段)?项目经历|新增项目经历|add\s+(an?\s+)?project/i],
-    ['edu', /添加教育(经历|背景)|新增教育|add\s+(an?\s+)?education/i]
+    /* 第四十四轮放宽：真实站点的按钮文案五花八门（「添加工作」「新增一段实习」…），
+       旧口径太窄是「工作经历一次也没添加」的嫌疑之一。 */
+    ['work', /添加(一?段)?(工作|实习)(经历)?|新增(一?段)?(工作|实习)(经历)?|add\s+(an?\s+)?(work|employment|internship|experience)/i],
+    ['proj', /添加(一?段)?项目(经历)?|新增(一?段)?项目(经历)?|add\s+(an?\s+)?(project|research)/i],
+    ['edu', /添加(一?段)?教育(经历|背景)?|新增教育|add\s+(an?\s+)?education/i]
   ];
   function countBlocks(sect) {
     var scan = scanForm(doc), seen = {}, n = 0;
@@ -2603,18 +2704,24 @@ function autoAddSections(opts) {
     ADD_PATS.forEach(function (p) { if (p[0] === sect) pat = p[1]; });
     if (!pat) return null;
     var hits = [];
-    var els = doc.querySelectorAll('button, a, [role="button"], span, div');
+    /* 第四十四轮：deepQueryAll 穿透 shadow DOM；不再按 children>3 粗暴跳过容器
+       （最内层过滤已经去重），文案上限放到 40。 */
+    var els = deepQueryAll(doc, 'button, a, [role="button"], span, div');
     for (var i = 0; i < els.length; i++) {
-      var el = els[i];
-      if (el.children && el.children.length > 3) continue;   /* 粗粒度容器不点 */
-      var t = clean(el.textContent);
-      if (!t || t.length > 30 || !pat.test(t)) continue;
-      hits.push(el);
+      var t = clean(els[i].textContent);
+      if (!t || t.length > 40 || !pat.test(t)) continue;
+      hits.push(els[i]);
       if (hits.length >= 8) break;
     }
     /* 只留最内层的命中：外层 div 往往把按钮文案包在里面，点它没反应 */
     var inner = hits.filter(function (el) {
       return !hits.some(function (other) { return other !== el && el.contains(other); });
+    });
+    /* 有真按钮 / 链接身份的优先 —— 光杆 span 点了常没反应 */
+    inner.sort(function (a, b) {
+      var sa = /^(button|a)$/.test(a.tagName.toLowerCase()) || a.getAttribute('role') === 'button' ? 0 : 1;
+      var sb = /^(button|a)$/.test(b.tagName.toLowerCase()) || b.getAttribute('role') === 'button' ? 0 : 1;
+      return sa - sb;
     });
     return inner[0] || hits[0] || null;
   }
@@ -2630,31 +2737,75 @@ function autoAddSections(opts) {
     mouse(el, 'pointerup'); mouse(el, 'mouseup'); mouse(el, 'click');
     if (typeof el.focus === 'function') { try { el.focus(); } catch (e) { /* 忽略 */ } }
   }
+  function keyEnter(el) {
+    var ex = { bubbles: true, cancelable: true, key: 'Enter', keyCode: 13, which: 13 };
+    try { el.dispatchEvent(new window.KeyboardEvent('keydown', ex)); } catch (e) { /* 忽略 */ }
+    try { el.dispatchEvent(new window.KeyboardEvent('keyup', ex)); } catch (e2) { /* 忽略 */ }
+  }
+  /* 第四十四轮：点了没反应的三级回退 —— 逐级升级，每一级都轮询等块数真的变化。
+     **绝不连点**：旧版「中途补点一次」在「扫描认不出新块」的页面上，
+     每个名额点两下、两个名额点四下 —— 用户实测堆出 4 段空白教育经历。 */
+  function tryClickWays(el, way) {
+    /* realClick 已派发 click 事件，不能再叠 el.click() —— 一次尝试触发两次
+       处理器，「添加经历」会一次加出两段（场景 H 实测）。 */
+    if (way === 0) { realClick(el); return; }
+    if (way === 1) { try { el.focus(); } catch (e) { /* 忽略 */ } keyEnter(el); return; }
+    var p = el.parentElement;   /* 末级：只点直接父层一层，不往上爬（防误点远处容器） */
+    if (p && p !== doc.body && clean(p.textContent).length <= 40) {
+      realClick(p);
+    }
+  }
   return new Promise(function (resolve) {
-    var added = { work: 0, proj: 0, edu: 0 };
+    var added = { work: 0, proj: 0, edu: 0 }, undetected = [];
     var queue = [];
     Object.keys(need).forEach(function (sect) {
       var have = countBlocks(sect), wantN = need[sect];
       for (var k = have; k < wantN; k++) queue.push(sect);
     });
-    if (!queue.length) return resolve({ ok: true, added: added });
+    if (!queue.length) return resolve({ ok: true, added: added, undetected: undetected });
+    function finish() {
+      /* 收尾先等页面稳一稳，再交给第二遍扫描 —— 避免扫到渲染到一半的 DOM */
+      setTimeout(function () { resolve({ ok: true, added: added, undetected: undetected }); }, 600);
+    }
     function step() {
-      if (!queue.length) return resolve({ ok: true, added: added });
+      if (!queue.length) return finish();
       var sect = queue.shift();
       var before = countBlocks(sect);
       var btn = findAddButton(sect);
       if (!btn) return step();   /* 找不到按钮：不硬来，缺的让第二遍如实报告 */
-      realClick(btn);
-      var tries = 0;
-      (function poll() {
-        setTimeout(function () {
-          tries++;
-          if (countBlocks(sect) > before) { added[sect]++; return step(); }
-          if (tries >= 12) return step();   /* 点了没出块：放弃这一组 */
-          if (tries === 6) realClick(btn);  /* 中途补点一次 */
-          poll();
-        }, 250);
-      })();
+      var done = false, way = 0;
+      function attempt() {
+        if (done) return;
+        tryClickWays(btn, way);
+        var tries = 0;
+        (function poll() {
+          setTimeout(function () {
+            if (done) return;
+            tries++;
+            if (countBlocks(sect) > before) {
+              done = true; added[sect]++;
+              /* 点出了新块：本组名额按新差额重排（旧的排队项作废） */
+              queue = queue.filter(function (s) { return s !== sect; });
+              var have2 = countBlocks(sect);
+              for (var k = have2; k < need[sect]; k++) queue.push(sect);
+              return step();
+            }
+            if (tries >= 10) {
+              if (way < 2) { way++; return attempt(); }
+              /* 三种点法都点不出「可识别」的新块：放弃本组剩余名额。
+                 若块其实加出来了只是扫描认不出，如实告知（填不了，别再点）。 */
+              var after = countBlocks(sect);
+              if (after <= before) {
+                undetected.push(sect);
+                queue = queue.filter(function (s) { return s !== sect; });
+              }
+              return step();
+            }
+            poll();
+          }, 350);
+        })();
+      }
+      attempt();
     }
     step();
   });

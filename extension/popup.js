@@ -267,7 +267,19 @@ async function fillCurrentPage() {
     throw new Error('这不是求职app导出的填表数据（需要 schema: zhiyin.fill.v1 或 v2）。');
   }
   lastFillSections = payload.sections || null;
-  const args = [{ fields: payload.fields, sections: payload.sections || null }];
+  /* 适配规则（第四十四轮）：zhiyin.adapt.v1 —— 探测结构 → 任何 AI 生成规则 → 贴回扩展 */
+  let adapt = null;
+  const adaptBox = $('#adaptInput');
+  if (adaptBox && adaptBox.value.trim()) {
+    let aj = null;
+    try { aj = JSON.parse(adaptBox.value); }
+    catch (e) { throw new Error('适配规则 JSON 解析失败：' + e.message); }
+    if (!aj || aj.schema !== 'zhiyin.adapt.v1' || !Array.isArray(aj.rules)) {
+      throw new Error('适配规则需要 {"schema":"zhiyin.adapt.v1","rules":[...]} 结构。');
+    }
+    adapt = aj;
+  }
+  const args = [{ fields: payload.fields, sections: payload.sections || null, adapt: adapt }];
   await injectBundle(tab.id);
   const injected = await chrome.scripting.executeScript({
     target: { tabId: tab.id },
@@ -392,7 +404,7 @@ async function doCopyProbe() {
   try {
     await navigator.clipboard.writeText(JSON.stringify(p, null, 2));
     $('#pbBanner').className = 'banner';
-    $('#pbBanner').innerHTML = '已复制页面结构。<b>把这段贴给我</b>，我就能针对这一页的组件写适配，不用继续猜。';
+    $('#pbBanner').innerHTML = '已复制页面结构。发给<b>任何 AI 助手或开发者</b>都能读懂 —— 请它按 <code>zhiyin.adapt.v1</code> 生成适配规则，贴回「辅助填写」的<b>适配规则</b>框，再点一次「填充当前页」即可，不用等任何人。';
     $('#pbCopy').textContent = '已复制';
   } catch (e) {
     $('#pbBanner').className = 'banner err';
@@ -535,7 +547,7 @@ function bindFill() {
           (comboFilled.length ? '（' + esc(comboFilled.map(function (f) { return (FF_NAMES[f.field] || f.field) + '→' + (f.shown || f.value || ''); }).join('；')) + '）' : '') +
           (comboMissed.length
             ? '<br>没填上的：' + esc(comboMissed.map(function (f) { return (FF_NAMES[f.field] || f.field) + '（' + f.reason + '）'; }).join('；')) +
-              '<br><b>这类栏需要针对性适配</b> —— 请到下面「探测表单结构」复制一份结构发我'
+              '<br><b>这类栏需要针对性适配</b> —— 到「探测表单结构」复制本页结构，发给任何 AI 助手生成适配规则，贴回「适配规则」框再填一次'
             : '')
         : '';
       /* 该说的都说清：为什么不填（敏感栏/文件），以及需要你手动补一下的地方 */

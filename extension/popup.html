@@ -64,6 +64,8 @@
     <div class="sub">在公司官网的申请表页：粘贴求职app「准备投递」弹窗里「复制填表数据」导出的 JSON，代填输入框。只填不提交——最后那一下由你亲手点。<br>你只需要<b>粘贴一次</b>。扩展会自动分三步填：① 姓名 / 邮箱这类普通输入框；② 页面上经历段块不够时，自动点「添加工作 / 项目经历」按钮补出表单；③ 公司名称、起止时间这类要点开检索列表或日历面板的栏（中间停几秒是在模拟真实点击，属正常）。各段经历<b>按名称和时间对应</b>：项目时间跟着项目名走，不会串到别的经历上；全新的空白表单则按页面上的段块顺序对应。只有某几段的名称栏里<b>已经有内容</b>、却和资料对不上时，那几段的时间才会先不填并提示你——核对后再点一次即可。</div>
     <div id="ffBanner" class="banner">把填表 JSON 粘到下面，点「填充当前页」。</div>
     <textarea id="ffInput" style="width:100%;height:86px;font:12px/1.5 Consolas,monospace;margin-bottom:8px;padding:6px;border:1px solid #d0d5dd;border-radius:8px" placeholder='从求职app「准备投递」弹窗点「复制填表数据」，粘到这里'></textarea>
+    <div class="sub" style="margin-top:8px"><b>适配规则（可选）</b>：某几栏反复填不上时用。把下方「探测表单结构」导出的 JSON 发给任何 AI 助手，请它按 <code>zhiyin.adapt.v1</code> 生成规则贴到这里，再点一次「填充当前页」，这几栏会按规则精确落位。</div>
+    <textarea id="adaptInput" style="width:100%;height:58px;font:12px/1.5 Consolas,monospace;margin-bottom:8px;padding:6px;border:1px solid #d0d5dd;border-radius:8px" placeholder='可选。留空 = 全部自动识别；填不动的栏才需要规则'></textarea>
     <div class="foot">
       <button id="ffFill" class="primary">填充当前页</button>
     </div>
@@ -71,7 +73,7 @@
   </div>
   <div class="sect">
     <h2>探测表单结构（填不上时用这个）</h2>
-    <div class="sub">有些栏填不动，是因为每家官网的组件都不一样。这个按钮<b>不改页面、不填值</b>，只把当前页每个可填控件的「标签写在哪儿、用的是什么组件、是不是只读、是不是下拉」导成一份清单。复制后发给开发者，就能针对这一页写适配，不用继续猜。<br><b>日期 / 下拉栏填不动时多一步</b>：先把它<b>点开</b>（让面板弹出来），再点这个按钮 —— 面板的结构会一起导出，那才是真正缺的那块。</div>
+    <div class="sub">有些栏填不上，是因为每家官网的组件都不一样。这个按钮<b>不改页面、不填值</b>，把当前页每个可填控件的「标签写在哪儿、用的什么组件、是不是只读、是不是下拉」导成一份清单——<b>自足排障，不依赖任何人</b>：<br>① 探测前先<b>点开</b>填不动的日期 / 下拉栏（面板结构会一并导出）；<br>② 点「复制结构 JSON」，发给<b>任何 AI 助手</b>（不必是开发者），请它按 <code>zhiyin.adapt.v1</code> 生成适配规则；<br>③ 规则贴到上面「辅助填写」的<b>适配规则</b>框，再点一次「填充当前页」。</div>
     <div id="pbBanner" class="banner">停在填不动的那个表单页，点「探测本页表单」。</div>
     <div id="pbBody"></div>
     <div class="foot">
