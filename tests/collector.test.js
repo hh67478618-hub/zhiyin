@@ -1309,6 +1309,62 @@ function runNowcoderReproSuite() {
                       winK.window.close();
                     });
                   });
+                }).then(function () {
+                  /* 场景 L（第四十六轮）：美团校招交付页扁平结构 —— 只有独立的
+                     「入学时间 / 毕业时间」两个日期栏（真实探测 JSON 实证）。
+                     旧口径：光杆时间栏继承不到组 → 教育块计数恒 0 → 误点「添加教育经历」
+                     堆空白段 + 教育日期填不上。新口径：入学 / 毕业 = 强教育信号。 */
+                  const winL = new JSDOM('<!DOCTYPE html><html><head><title>美团招聘</title></head><body>' +
+                    '<input data-t="nameL" placeholder="请输入你的真实姓名">' +
+                    '<input data-t="emailL" placeholder="建议填写QQ邮箱">' +
+                    '<div class="mtd-form-item"><div class="mtd-form-item__control"><div class="mtd-date-picker">' +
+                    '<input data-t="eduStartL" readonly placeholder="入学时间"></div></div></div>' +
+                    '<div class="mtd-form-item"><div class="mtd-form-item__control"><div class="mtd-date-picker">' +
+                    '<input data-t="eduEndL" readonly placeholder="毕业时间"></div></div></div>' +
+                    '<button id="addEduL" type="button">添加教育经历</button></body></html>',
+                    { url: 'https://zhaopin.meituan.com/web/delivery-confirm', runScripts: 'outside-only' });
+                  winL.window.eval(src);
+                  let clicksL = 0;
+                  winL.window.document.getElementById('addEduL').addEventListener('click', function () { clicksL++; });
+                  mockMtdPicker(winL.window);
+                  const EDU_L = { education: [{ school: '甲大学', major: '软件工程', time: '2023-09 ~ 2027-06' }] };
+                  return winL.window.autoAddSections({ sections: EDU_L }).then(function (rL) {
+                    ok('美团扁平页：入学/毕业时间被认成教育块 → 不再误点「添加教育经历」',
+                      clicksL === 0, JSON.stringify({ clicks: clicksL, r: rL }));
+                    return winL.window.fillComboFields({ fields: {}, sections: EDU_L }).then(function (rL2) {
+                      const vL = {};
+                      winL.window.document.querySelectorAll('[data-t]').forEach(function (el) { vL[el.dataset.t] = el.value; });
+                      ok('美团扁平页：入学时间 / 毕业时间按教育经历起止落位',
+                        vL.eduStartL === '2023-09' && vL.eduEndL === '2027-06',
+                        JSON.stringify(vL));
+                      winL.window.close();
+                    });
+                  });
+                }).then(function () {
+                  /* 场景 M（第四十六轮）：适配规则 index —— 同款组件堆在一页、栏上没有
+                     可识别文案时（美团页十几个 mtd-select 全叫「请选择」），按序号定位。 */
+                  const winM = new JSDOM('<!DOCTYPE html><html><head><title>申请表</title></head><body>' +
+                    '<div class="mtd-date-picker"><input data-t="d1" readonly placeholder="开始时间"></div>' +
+                    '<div class="mtd-date-picker"><input data-t="d2" readonly placeholder="开始时间"></div>' +
+                    '<div class="mtd-date-picker"><input data-t="d3" readonly placeholder="开始时间"></div></body></html>',
+                    { url: 'https://careers.example.com/apply6', runScripts: 'outside-only' });
+                  winM.window.eval(src);
+                  mockMtdPicker(winM.window);
+                  return winM.window.fillComboFields({
+                    fields: {},
+                    sections: { work: [{ company: '甲公司', time: '2025-11 ~ 2026-01' }, { company: '乙公司', time: '2024-05 ~ 2025-07' }] },
+                    adapt: { schema: 'zhiyin.adapt.v1', rules: [
+                      { sel: '.mtd-date-picker input', index: 1, get: 'sections.work.1.time', part: 'start', kind: 'date' },
+                      { sel: '.mtd-date-picker input', get: 'sections.work.0.time', part: 'start', kind: 'date' }
+                    ] }
+                  }).then(function (rM) {
+                    const vM = {};
+                    winM.window.document.querySelectorAll('[data-t]').forEach(function (el) { vM[el.dataset.t] = el.value; });
+                    ok('适配规则 index：第 2 个匹配按序号落位，未带 index 的落第一个',
+                      vM.d2 === '2024-05' && vM.d1 === '2025-11' && vM.d3 === '',
+                      JSON.stringify(vM));
+                    winM.window.close();
+                  });
                 });
               });
             });

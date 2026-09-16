@@ -1209,7 +1209,16 @@ var SECT_KW = [
 var AMBIG_LABEL = /^.{0,6}(时间|日期)$/;
 
 function sectOf(label) {
-  if (!label || AMBIG_LABEL.test(label)) return '';
+  if (!label) return '';
+  /* 第四十六轮：入学 / 毕业 / 在校是强教育信号 —— 必须先于「光杆时间栏」判断。
+     美团校招交付页（zhaopin.meituan.com，真实探测 JSON 实证）的申请表是扁平结构：
+     只有独立的「入学时间 / 毕业时间」两个日期栏（标签以「时间」结尾，命中光杆口径），
+     前后没有院校 / 学校栏目词可继承 —— 旧口径 sect 恒空，后果：
+     ① 教育块计数恒 0 → autoAddSections 误点「添加教育经历」，每点一次填充多一段空白教育；
+     ② 教育起止时间没有归属，整段填不上。
+     「毕业院校」这类本来就命中 edu 词表的标签不受影响（同组返回）。 */
+  if (/入学|毕业|在校/.test(label)) return 'edu';
+  if (AMBIG_LABEL.test(label)) return '';
   for (var i = 0; i < SECT_KW.length; i++) { if (SECT_KW[i].re.test(label)) return SECT_KW[i].id; }
   return '';
 }
@@ -1593,8 +1602,17 @@ function fillComboFields(opts) {
   if (adaptRules.length) {
     adaptRules.forEach(function (r) {
       var el = null;
-      try { el = doc.querySelector(r.sel); } catch (e) { /* 非法选择器按没找到处理 */ }
+      try {
+        var elsA = doc.querySelectorAll(r.sel);
+        if (typeof r.index === 'number' && elsA.length) {
+          /* 第四十六轮：index = 第 N 个匹配（同款组件堆在一页、栏上又没有可识别
+             文案时，按 DOM 序号定位 —— 美团页十几个 mtd-select 全叫「请选择」，
+             只有序号能用。越界自动夹到最后一个。 */
+          el = elsA[Math.max(0, Math.min(r.index, elsA.length - 1))];
+        } else el = elsA[0];
+      } catch (e) { /* 非法选择器按没找到处理 */ }
       if (!el) { results.notice.push('适配规则找不到元素：' + r.sel); return; }
+      if (el.disabled) { results.notice.push('适配规则指向的栏是禁用状态，没有填：' + r.sel); return; }
       var v = resolveAdaptValue(r.get, r.part);
       if (v == null || clean(v) === '') { results.notice.push('适配规则取不到值：' + r.get); return; }
       var x = null;
@@ -1646,9 +1664,16 @@ function fillComboFields(opts) {
   if (!fullWorkHas([/职位名称/, /岗位名称/, /职务/, /^职位$/, /^岗位$/])) {
     want('role', [/职位名称/, /岗位名称/, /职务/, /^职位$/, /^岗位$/], fields.role);
   }
-  /* 单值日期：载荷直接给了毕业/入学时间（没有结构化经历数据时走这里） */
-  want('gradYear', [/毕业(时间|年份|年月|日期)/, /graduation/i], fields.gradYear, true);
-  want('gradEnd', [/入学|就读(开始|起止)/], fields.gradEnd, true);
+  /* 单值日期：载荷直接给了毕业/入学时间。
+     第四十六轮：只在**没有结构化教育经历**时走这里 —— 有 sections.education 时，
+     教育的起止时间由下面的分段配对口径安排（同一条时间的开始和结束一起落位）；
+     单值口径先抢走「毕业时间」栏，分段配对会报「没找到结束时间栏」。
+     美团扁平页（有教育日期块、fields 里没有入学时间键）由 R1 的强教育信号
+     + 分段配对接管，不依赖这里。 */
+  if (!(sec && sec.education && sec.education.length)) {
+    want('gradYear', [/毕业(时间|年份|年月|日期)/, /graduation/i], fields.gradYear, true);
+    want('gradEnd', [/入学|就读(开始|起止)/], fields.gradEnd, true);
+  }
 
   /* ---------- 分段起止时间：先按内容对齐，再按组内顺序兜底（第三十八轮重写） ----------
      实测踩坑（牛客式简历页）：旧口径「载荷第 k 条 ↔ 全页第 k 个开始时间」不分工作 / 项目组 ——
