@@ -2610,11 +2610,15 @@ const VIEW_INFO = {
 
 /* 「第四十轮」侧栏速览：经历 / 成就 / 登记三个数字，renderTop 与首屏布局观察器都会刷它 */
 function updateSideInfo() {
-  const siE = document.getElementById('siExp');
-  if (!siE) return;
-  siE.textContent = String((state.experiences || []).length);
-  document.getElementById('siAch').textContent = String((state.inventory || []).length);
-  document.getElementById('siApp').textContent = String((state.applications || []).length);
+  /* 第五十轮补：textContent 同值写入也会替换文本节点（childList 变异），会喂给布局观察器，
+     这里同值跳过，杜绝「写入 → 观察器 → 再写入」的空转。 */
+  const set = function (id, v) {
+    const el = document.getElementById(id);
+    if (el && el.textContent !== v) el.textContent = v;
+  };
+  set('siExp', String((state.experiences || []).length));
+  set('siAch', String((state.inventory || []).length));
+  set('siApp', String((state.applications || []).length));
 }
 function renderTop() {
   const p = state.profile;
@@ -2731,9 +2735,14 @@ function balanceResumeGrid() {
   const cards = ids.map(id => document.getElementById(id)).filter(Boolean);
   if (cards.length < ids.length) return;
   if (window.innerWidth <= 980) {
-    ids.forEach(id => { const c = document.getElementById(id); if (c) colL.appendChild(c); });
-    colL.appendChild(tips);
-    grid.dataset.balSig = 'stacked';
+    /* 第五十轮补：窄屏分支原来无条件 appendChild 全部卡片 —— 观察器每触发一次就搬一次 DOM，
+       焦点与滚动位置被反复没收（点输入框填不了字、页面跳回顶部），且搬运本身再触发观察器，
+       形成自持循环。加签名守卫：已经叠放好就不再动 DOM。 */
+    if (grid.dataset.balSig !== 'stacked') {
+      ids.forEach(id => { const c = document.getElementById(id); if (c) colL.appendChild(c); });
+      colL.appendChild(tips);
+      grid.dataset.balSig = 'stacked';
+    }
     return;
   }
   if (!grid.offsetHeight) return;
