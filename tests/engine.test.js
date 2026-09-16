@@ -709,6 +709,36 @@ ok('迁移：旧存档里的投递记录一个不丢（加新键不能伤老数�
   return s.applications.length === 1;
 })());
 
+/* ============ 第四十八轮：申学侧老存档脆弱点补齐（变异测试逐项复现过报错形态） ============ */
+ok('迁移：studyPref 缺 regions/fields/custom* 时补空数组（否则偏好块 indexOf 炸）', (function () {
+  const s = mergeState({ ver: 4, studyPref: { weights: { 硬性条件: 55, 研究方向: 25, 地区偏好: 10, 科研产出: 10 } } });
+  return Array.isArray(s.studyPref.regions) && Array.isArray(s.studyPref.fields)
+    && Array.isArray(s.studyPref.customRegions) && Array.isArray(s.studyPref.customFields);
+})());
+ok('迁移：studyPref 缺 weights 或权重缺键时逐项补默认值（否则 Object.keys 炸）', (function () {
+  const a = mergeState({ ver: 4, studyPref: {} }).studyPref.weights;
+  const b = mergeState({ ver: 4, studyPref: { weights: { 硬性条件: 70 } } }).studyPref.weights;
+  return a['硬性条件'] === 55 && a['研究方向'] === 25 && b['硬性条件'] === 70 && b['研究方向'] === 25;
+})());
+ok('迁移：profMail 缺 targets/sender 时补齐（否则导师检索 length 炸）', (function () {
+  const s = mergeState({ ver: 4, profMail: { scope: 'abroad' } });
+  return Array.isArray(s.profMail.targets) && s.profMail.sender && typeof s.profMail.sender.name === 'string';
+})());
+ok('迁移：pushLog 缺 ids/history 时补空数组（否则同日再渲染 indexOf 炸）', (function () {
+  const s = mergeState({ ver: 4, pushLog: { date: '2026-09-16' } });
+  return Array.isArray(s.pushLog.ids) && Array.isArray(s.pushLog.history);
+})());
+ok('迁移：旧版改写结果（ok=true 缺 bullets）被丢弃，不进渲染层（forEach 炸点）', (function () {
+  const s = mergeState({ ver: 4, docAdapt: { mode: 'ps', req: '要求', result: { ok: true, usedItems: [1], alignment: 0.5 } } });
+  return s.docAdapt.result === null && s.docAdapt.req === '要求';
+})());
+ok('迁移：新版改写结果（bullets/usedItems 齐全）原样保留', (function () {
+  const r = { ok: true, usedItems: [1], bullets: [{ text: 'x', orig: 'x', sourceId: 'a' }], alignment: 0.5 };
+  const s = mergeState({ ver: 4, docAdapt: { mode: 'ps', req: '', result: r } });
+  return s.docAdapt.result === r;
+})());
+ok('迁移：老存档自动补齐岗位来源筛选键（默认全部来源，不缺下拉选项）', mergeState({ ver: 3 }).filters.jobSrc === '全部来源');
+
 /* ============ 第三十五轮：解析根因修复（本套件可直接调 parseResume） ============ */
 const issn35 = parseResume('教育背景\\n贵州医科大学 口腔医学 本科 2020.09 - 2025.07\\n《论文》发表于《饮食保健》2021 年第 25 期（ISSN 2095-8439）');
 ok('ISSN 2095-8439 不再污染毕业年份（年份区间 + 月份后缘检查）',
@@ -740,6 +770,39 @@ ok('studyPref 默认带 prefOpen（申学偏好折叠状态有地方记）',
     const sp = mergeState({}).studyPref;
     return !!sp.prefOpen && sp.prefOpen.region === false && sp.prefOpen.field === false;
   })());
+
+/* 导入岗位（zhiyin.jobs.v1）扩展字段：岗位表快照进池的关键路径 */
+out.push('=== 16b. 导入岗位扩展字段（group/tag/ddl/grad/ref/tweet/applyUrl） ===');
+(function () {
+  const before = JOBS.length;
+  const r = importJobs(JSON.stringify({ schema: 'zhiyin.jobs.v1', items: [
+    { company: '示例药业', position: '秋招 · 研发 / 营销 等2个方向', city: '全国多地', group: 'bio', tag: '秋招',
+      grad: '27届应届', ddl: '2026-10-31', ref: 'ABC123', tweet: 'https://mp.weixin.qq.com/s/x',
+      url: 'https://ex.com/campus', applyUrl: 'https://ex.com/campus', skills: ['研发', '营销'] }
+  ] }));
+  ok('扩展字段导入成功且计数正确', r.ok && r.stat.added === 1 && JOBS.length === before + 1);
+  const j = JOBS[JOBS.length - 1];
+  ok('group 认显式值（不再靠关键词猜）', j.group === 'bio');
+  ok('tag 用导入方给的值（不是硬编码「导入」）', j.tag === '秋招');
+  ok('ddl / grad / ref / tweet 四个可选字段原样落库',
+    j.ddl === '2026-10-31' && j.grad === '27届应届' && j.ref === 'ABC123' && j.tweet === 'https://mp.weixin.qq.com/s/x');
+  ok('applyUrl 生效：直达官网入口与按钮文案', applyEntryUrl(j) === 'https://ex.com/campus' && applyEntryLabel(j) === '直达官网');
+  ok('只给 url 没给 applyUrl 时回落到 url', (function () {
+    const r2 = importJobs(JSON.stringify({ items: [{ company: '示例药业', position: '实习 · 量产岗', url: 'https://ex.com/i' }] }));
+    const j2 = JOBS[JOBS.length - 1];
+    return r2.ok && r2.stat.added === 1 && j2.applyUrl === 'https://ex.com/i';
+  })());
+  ok('重复导入被跳过（只补不覆）',
+    importJobs(JSON.stringify({ items: [{ company: '示例药业', position: '秋招 · 研发 / 营销 等2个方向' }] })).stat.skipped === 1);
+  ok('group 给了认不出的值时回落关键词识别',
+    importJobs(JSON.stringify({ items: [{ company: '示例钢管', position: '焊接工程师', group: 'nope' }] })).ok &&
+    JOBS[JOBS.length - 1].group !== 'nope');
+  ok('扩展字段不污染：没给这些字段的旧格式照常导入', (function () {
+    const r3 = importJobs(JSON.stringify({ items: [{ company: '示例钢管', position: '质检员' }] }));
+    const j3 = JOBS[JOBS.length - 1];
+    return r3.ok && j3.tag === '导入' && j3.ddl === undefined && j3.ref === undefined;
+  })());
+})();
 
 out.push('');
 out.push('=== 结果 ===');
@@ -1522,6 +1585,7 @@ const elStub = () => ({
 const documentStub = {
   querySelector: () => elStub(),
   querySelectorAll: () => [],
+  getElementById: () => elStub(),
   createElement: () => elStub(),
   body: elStub(),
   title: ''

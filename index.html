@@ -1540,6 +1540,9 @@ function defaultFilters() {
     /* 第三十五轮：岗位关键词搜索 + 偏好分组折叠状态。老存档缺键由 mergeState 的
        Object.assign(defaultFilters(), …) 兜底补齐，不必动版本号。 */
     jobQ: '', prefOpen: { city: false, type: false, ind: false },
+    /* 第四十八轮：岗位来源筛选 —— 全部来源 / 仅采集导入 / 仅内置示例。
+       区分「你真实采集的」与「体验用的示例数据」，示例库重置或清空都不影响真实岗位的查看。 */
+    jobSrc: '全部来源',
     studyPage: 1, jobPage: 1
   };
 }
@@ -1810,6 +1813,38 @@ function mergeState(o) {
       };
     });
   }
+  /* 第四十八轮：申学侧老存档脆弱点统一补齐。studyPref/profMail/pushLog/docAdapt
+     都是浅合并（Object.assign 只补顶层键），老存档里缺的子键会以 undefined 直达渲染层。
+     变异测试逐项验证过报错形态：
+     studyPref 缺 regions/fields → indexOf、缺 weights → Object.keys；
+     profMail 缺 targets → length；pushLog 同日缺 ids → indexOf；
+     docAdapt.result 旧形态（ok=true 缺 bullets）→ renderDocAdapt 里 forEach。 */
+  s.studyPref.regions = Array.isArray(s.studyPref.regions) ? s.studyPref.regions : [];
+  s.studyPref.fields = Array.isArray(s.studyPref.fields) ? s.studyPref.fields : [];
+  s.studyPref.customRegions = Array.isArray(s.studyPref.customRegions) ? s.studyPref.customRegions : [];
+  s.studyPref.customFields = Array.isArray(s.studyPref.customFields) ? s.studyPref.customFields : [];
+  s.studyPref.prefOpen = (s.studyPref.prefOpen && typeof s.studyPref.prefOpen === 'object') ? s.studyPref.prefOpen : {};
+  s.studyPref.weights = Object.assign({ 硬性条件: 55, 研究方向: 25, 地区偏好: 10, 科研产出: 10 },
+    (s.studyPref.weights && typeof s.studyPref.weights === 'object') ? s.studyPref.weights : {});
+  s.pushLog = (s.pushLog && typeof s.pushLog === 'object') ? s.pushLog : {};
+  s.pushLog.date = typeof s.pushLog.date === 'string' ? s.pushLog.date : '';
+  s.pushLog.ids = Array.isArray(s.pushLog.ids) ? s.pushLog.ids : [];
+  s.pushLog.history = Array.isArray(s.pushLog.history) ? s.pushLog.history : [];
+  s.profMail = (s.profMail && typeof s.profMail === 'object') ? s.profMail : null;
+  if (s.profMail) {
+    s.profMail.targets = Array.isArray(s.profMail.targets) ? s.profMail.targets : [];
+    s.profMail.sender = Object.assign({ name: '', school: '', year: '', background: '', interest: '', tie: '' },
+      (s.profMail.sender && typeof s.profMail.sender === 'object') ? s.profMail.sender : {});
+    if (!s.profMail.lastQuery || typeof s.profMail.lastQuery !== 'object') s.profMail.lastQuery = null;
+  }
+  s.docAdapt = (s.docAdapt && typeof s.docAdapt === 'object') ? s.docAdapt : null;
+  if (s.docAdapt && s.docAdapt.result && s.docAdapt.result.ok) {
+    /* 旧版改写结果缺 bullets / usedItems：把 result 丢弃而不是让渲染炸掉。
+       result 只是上次改写的展示缓存 —— 丢它不丢任何用户输入（req / mode / strength 都还在），
+       界面上重新点一次「改写」就有了，说清楚比装作没问题强。 */
+    if (!Array.isArray(s.docAdapt.result.bullets) || !Array.isArray(s.docAdapt.result.usedItems)
+      || typeof s.docAdapt.result.alignment !== 'number') s.docAdapt.result = null;
+  }
   s.ver = STATE_VER;
   if (!s.vdate) s.vdate = dateStr(new Date());
   return s;
@@ -2021,17 +2056,25 @@ function importJobs(text) {
       company: company,
       position: position,
       city: String(it.city || '').trim(),
-      group: detectGroup(position + ' ' + company),
+      /* group 可由导入方显式指定（岗位表自带行业口径时比关键词猜的准）；认不出的值仍走关键词识别 */
+      group: (it.group && FIELD_MAP[it.group]) ? it.group : detectGroup(position + ' ' + company),
       industry: String(it.industry || '').trim(),
       edu: String(it.edu || '').trim(),
       salary: salary || [0, 0],
       salaryUnknown: !salary,
       skills: Array.isArray(it.skills) ? it.skills.slice() : [],
-      tag: '导入',
+      tag: String(it.tag || '').trim() || '导入',
       imported: true,
-      url: String(it.url || '').trim()
+      url: String(it.url || '').trim(),
+      /* 投递直达入口：与卡片「直达官网」按钮共用（applyEntryUrl 优先读 applyUrl） */
+      applyUrl: String(it.applyUrl || it.url || '').trim()
     };
     if (it.salaryRaw) job.salaryRaw = String(it.salaryRaw);
+    /* 岗位表里的其它事实字段：有才存，没有不编（宁缺毋猜） */
+    if (String(it.ddl || '').trim()) job.ddl = String(it.ddl).trim();
+    if (String(it.grad || '').trim()) job.grad = String(it.grad).trim();
+    if (String(it.ref || '').trim()) job.ref = String(it.ref).trim();
+    if (String(it.tweet || '').trim()) job.tweet = String(it.tweet).trim();
     JOBS.push(job);
     state.importedJobs.push(job);
     added++;
@@ -2734,10 +2777,11 @@ function switchView(v) {
   $$('.view').forEach(s => s.classList.toggle('active', s.id === 'view-' + v));
   $('#viewTitle').textContent = VIEW_INFO[v][0];
   $('#viewSub').textContent = VIEW_INFO[v][1];
-  if (v === 'study') renderStudy();
-  if (v === 'job') renderJobs();
-  if (v === 'track') renderTrack();
-  if (v === 'resume') balanceResumeGrid();  /* 「第三十九轮」回到首屏时重新配平（隐藏期间量不到高度） */
+  /* 第四十八轮：切换时的重渲染同样接错 —— 一个视图失败不再殃及其它视图的点击 */
+  if (v === 'study') tryRender('申学', renderStudy);
+  if (v === 'job') tryRender('岗位', renderJobs);
+  if (v === 'track') tryRender('投递', renderTrack);
+  if (v === 'resume') tryRender('首屏配平', balanceResumeGrid);  /* 「第三十九轮」回到首屏时重新配平（隐藏期间量不到高度） */
   try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch (e) { /* 环境不支持时忽略 */ }
 }
 
@@ -3629,8 +3673,9 @@ function renderDocAdapt() {
     (activeJob ? '<button class="btn sm" id="daSave" ' + (d.result ? '' : 'disabled') + '>' + (activeJob.customDoc ? '更新保存 v' + ((activeJob.customDoc.version || 1) + 1) : '保存到这条投递') + '</button><button class="btn sm" id="daClear">清除绑定</button>' : '') +
     '</div>');
 
-  /* Output */
-  if (d.result && d.result.ok) {
+  /* Output。第四十八轮：补一道闸 —— result 必须带齐 bullets/usedItems 才进渲染，
+     旧形态结果在 mergeState 已丢弃，这里兜住万一；缺了就当没结果，让用户重跑一次改写。 */
+  if (d.result && d.result.ok && Array.isArray(d.result.bullets) && Array.isArray(d.result.usedItems) && typeof d.result.alignment === 'number') {
     const r = d.result;
     html.push('<div class="divider"></div>');
     html.push('<div class="hint" style="margin-bottom:8px;font-weight:600">改写结果 — 从你的仓库里挑出 <b>' + r.usedItems.length + '</b> 条事实，按与 JD 的对齐度排序</div>');
@@ -3872,6 +3917,10 @@ function renderJobList() {
   if (state.filters.jobCity !== '全部') rows = rows.filter(x => x.j.city === state.filters.jobCity);
   if (state.filters.jobType !== '全部') rows = rows.filter(x => x.m.type === state.filters.jobType);
   if (state.filters.jobIndustry !== '全部') rows = rows.filter(x => x.j.industry === state.filters.jobIndustry);
+  /* 第四十八轮：来源筛选。imported 标记由导入通道写入（jobImportJobs / syncImportedJobs 均保留），
+     内置示例库没有这个标记 —— 按「有没有标记」分边，不猜、不新增冗余字段。 */
+  if (state.filters.jobSrc === '仅采集导入') rows = rows.filter(x => x.j.imported);
+  else if (state.filters.jobSrc === '仅内置示例') rows = rows.filter(x => !x.j.imported);
   rows = rows.filter(x => x.m.score >= state.filters.jobMin).sort((a, b) => b.m.score - a.m.score);
   /* 分页：每页 10 条；「# 推荐位」显示全局名次而不是页内名次 */
   const JOB_PAGE_SIZE = 10;
@@ -3894,13 +3943,15 @@ function renderJobList() {
   html.push('<select id="jCity">' + cities.map(r => '<option' + (r === state.filters.jobCity ? ' selected' : '') + '>' + r + '</option>').join('') + '</select>');
   html.push('<select id="jType">' + types.map(r => '<option' + (r === state.filters.jobType ? ' selected' : '') + '>' + r + '</option>').join('') + '</select>');
   html.push('<select id="jInd">' + inds.map(r => '<option' + (r === state.filters.jobIndustry ? ' selected' : '') + '>' + r + '</option>').join('') + '</select>');
+  /* 第四十八轮：来源筛选 —— 采集导入的岗位只有你本机有，示例数据用来体验匹配逻辑 */
+  html.push('<select id="jSrc">' + ['全部来源', '仅采集导入', '仅内置示例'].map(r => '<option' + (r === state.filters.jobSrc ? ' selected' : '') + '>' + r + '</option>').join('') + '</select>');
   html.push('<span class="hint">匹配度下限</span><input type="range" min="0" max="95" value="' + state.filters.jobMin + '" id="jMin" style="width:130px"><span class="hint" id="jMinV">' + state.filters.jobMin + '</span>');
   html.push('</div>');
   if (!rows.length) html.push('<div class="empty"><div class="big">没有符合条件的岗位</div>试试放宽筛选，或调整偏好与权重</div>');
   jobPageRows.forEach(function (x, i) {
     const done = applied.indexOf(x.j.company + '|' + x.j.position) >= 0;
     html.push('<div class="item"><div class="item-h"><div><div class="who">' + esc(x.j.company) + ' · ' + esc(x.j.position) + (done ? '<span class="tag ok">已投递</span>' : '') + '</div>' +
-      '<div class="meta">' + esc(x.j.city) + '　' + (x.j.industry ? esc(x.j.industry) + '　' : '') + esc(x.j.edu) + ' 起　' + (x.j.salaryUnknown ? '薪资面议' : money(x.j.salary[0]) + '-' + money(x.j.salary[1]) + 'k / 月') + '　' + esc(x.j.tag) + (x.j.imported ? '　<span class="tag brand">采集</span>' : '') + '</div></div>' +
+      '<div class="meta">' + esc(x.j.city) + '　' + (x.j.industry ? esc(x.j.industry) + '　' : '') + (x.j.grad ? esc(x.j.grad) + '　' : esc(x.j.edu) + ' 起　') + (x.j.salaryUnknown ? '薪资面议' : money(x.j.salary[0]) + '-' + money(x.j.salary[1]) + 'k / 月') + '　' + esc(x.j.tag) + (x.j.ddl ? '　<span class="hint">DDL ' + esc(x.j.ddl) + '</span>' : '') + (x.j.imported ? '　<span class="tag brand">采集</span>' : '') + '</div></div>' +
       '<div class="score-badge"><div class="n" style="color:#4F46E5">' + x.m.score + '<small> 分</small></div><div class="bar"><i style="width:' + x.m.score + '%"></i></div><div class="hint" style="font-size:11px"># ' + ((state.filters.jobPage - 1) * JOB_PAGE_SIZE + i + 1) + ' 推荐位</div></div></div>');
     html.push('<div class="item-body"><div class="chips">');
     x.j.skills.forEach(function (k) {
@@ -3912,8 +3963,8 @@ function renderJobList() {
     (x.m.reasons.length ? x.m.reasons : ['暂无明显加分项']).forEach(r => html.push('<span class="tag brand">' + esc(r) + '</span>'));
     if (x.m.miss.length) html.push('<span class="tag warn">缺 ' + x.m.miss.length + ' 项技能</span>');
     html.push('</div>');
-    html.push('<div class="item-foot"><span class="hint">技能 ' + Math.round(x.m.sub['技能匹配'] * 100) + '%　方向 ' + Math.round(x.m.sub['方向对口'] * 100) + '%　城市 ' + Math.round(x.m.sub['城市偏好'] * 100) + '%　薪资 ' + Math.round(x.m.sub['薪资匹配'] * 100) + '%　经历 ' + Math.round(x.m.sub['经历相关'] * 100) + '%</span>');
-    html.push('<div class="tools"><button class="btn sm primary" data-apply="' + esc(x.j.company + '|' + x.j.position) + '">准备投递</button><button class="btn sm" data-detail="' + esc(x.j.company + '|' + x.j.position) + '">匹配明细</button><a class="btn sm" href="' + esc(applyEntryUrl(x.j)) + '" target="_blank" rel="noopener noreferrer">' + applyEntryLabel(x.j) + '</a></div></div>');
+    html.push('<div class="item-foot"><span class="hint">技能 ' + Math.round(x.m.sub['技能匹配'] * 100) + '%　方向 ' + Math.round(x.m.sub['方向对口'] * 100) + '%　城市 ' + Math.round(x.m.sub['城市偏好'] * 100) + '%　薪资 ' + Math.round(x.m.sub['薪资匹配'] * 100) + '%　经历 ' + Math.round(x.m.sub['经历相关'] * 100) + '%' + (x.j.ref ? '　·　内推码 ' + esc(x.j.ref) : '') + '</span>');
+    html.push('<div class="tools"><button class="btn sm primary" data-apply="' + esc(x.j.company + '|' + x.j.position) + '">准备投递</button><button class="btn sm" data-detail="' + esc(x.j.company + '|' + x.j.position) + '">匹配明细</button><a class="btn sm" href="' + esc(applyEntryUrl(x.j)) + '" target="_blank" rel="noopener noreferrer">' + applyEntryLabel(x.j) + '</a>' + (x.j.tweet ? '<a class="btn sm" href="' + esc(x.j.tweet) + '" target="_blank" rel="noopener noreferrer">官方推文</a>' : '') + '</div></div>');
     html.push('</div></div>');
   });
   html.push(pagerHtml(rows.length, state.filters.jobPage, jobPages, '个岗位'));
@@ -3930,6 +3981,7 @@ function renderJobList() {
   });
   $('#jCity').addEventListener('change', e => { state.filters.jobCity = e.target.value; state.filters.jobPage = 1; save(); renderJobList(); });
   $('#jType').addEventListener('change', e => { state.filters.jobType = e.target.value; state.filters.jobPage = 1; save(); renderJobList(); });
+  $('#jSrc').addEventListener('change', e => { state.filters.jobSrc = e.target.value; state.filters.jobPage = 1; save(); renderJobList(); });
   $('#jInd').addEventListener('change', e => { state.filters.jobIndustry = e.target.value; state.filters.jobPage = 1; save(); renderJobList(); });
   $('#jMin').addEventListener('input', e => { state.filters.jobMin = +e.target.value; $('#jMinV').textContent = e.target.value; });
   $('#jMin').addEventListener('change', () => { state.filters.jobPage = 1; save(); renderJobList(); });
@@ -5796,7 +5848,7 @@ function buildJdText(company, position) {
 function openImportJobs() {
   const body = [
     '<div class="notice">把浏览器扩展「职位采集」导出的 JSON 粘进来（schema = <b>zhiyin.jobs.v1</b>）。' +
-    '识别的字段：company / position / city / edu / salaryRaw / skills / url。' +
+    '识别的字段：company / position / city / edu / salaryRaw / skills / url 为必读，另有可选的 applyUrl（投递直达）/ group（分组）/ tag（徽标）/ ddl（截止日）/ grad（毕业范围）/ ref（内推码）/ tweet（官方推文）。' +
     '<b>只补不覆</b> —— 与岗位池重复的（同公司 + 同岗位名）会自动跳过，不会覆盖你已有的记录。</div>',
     '<div class="field"><label>采集结果 JSON</label>' +
     '<textarea id="importJobsJson" style="min-height:200px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.5px;line-height:1.6" ' +
@@ -7426,11 +7478,40 @@ function openHelpModal() {
     [{ label: '知道了', cls: 'btn primary', act: closeModal }]);
 }
 
+/* 第四十八轮：启动期「看得见点不动」根治。
+   之前五个渲染函数在导航绑定之前串行执行，任何一个抛错都会中断 init ——
+   导航点击一个都绑不上，整页看得见、点不动、且毫无提示。
+   现在：导航先绑；渲染逐个接错，失败只影响自己，并在页面顶部挂一条
+   不带遮罩的提示条把错误原文摆出来（不弹窗 —— 弹窗遮罩会拦住整页）。 */
+function showBootBanner(msg) {
+  try {
+    showBootBanner._shown = showBootBanner._shown || [];
+    if (showBootBanner._shown.indexOf(msg) >= 0) return;
+    showBootBanner._shown.push(msg);
+    const d = document.createElement('div');
+    d.style.cssText = 'position:fixed;top:10px;left:50%;transform:translateX(-50%);z-index:9999;max-width:680px;' +
+      'background:#FEE2E2;color:#7F1D1D;border:1px solid #FCA5A5;border-radius:10px;padding:10px 14px;' +
+      'font-size:12.5px;line-height:1.6;box-shadow:0 8px 24px rgba(0,0,0,.15)';
+    d.innerHTML = '<b>「' + esc(msg) + '」没有加载成功，其余功能不受影响。</b><br>把这行红字截图发出去，就能定位问题。';
+    document.body.appendChild(d);
+    setTimeout(function () { if (d.parentNode) d.parentNode.removeChild(d); }, 20000);
+  } catch (e) { /* 提示条失败只留控制台 */ }
+}
+function tryRender(name, fn) {
+  try { fn(); }
+  catch (e) {
+    try { console.error('[zhiyin] ' + name + ' 渲染失败', e); } catch (e2) { /* 忽略 */ }
+    showBootBanner(name + '：' + (e && e.message ? e.message : String(e)));
+  }
+}
 function init() {
   load();
-  renderTop(); renderProfileForm();
-  renderStudy(); renderJobs(); renderTrack();
-  renderInventory();
+  $$('.nav-item').forEach(b => b.addEventListener('click', () => switchView(b.dataset.view)));
+  tryRender('画像', function () { renderTop(); renderProfileForm(); });
+  tryRender('申学', renderStudy);
+  tryRender('岗位', renderJobs);
+  tryRender('投递', renderTrack);
+  tryRender('经历清单', renderInventory);
   bindMonthPickers();   /* 起止时间的月份下拉（第二十五轮） */
   bindStudyNav();       /* 「第三十四轮」申学视图锚点子导航 */
   bindResumeBalance();  /* 「第三十九轮」首屏双列动态配平 */
@@ -7443,7 +7524,6 @@ function init() {
     doParse(s.text, '示例简历 · ' + s.name);
   }));
 
-  $$('.nav-item').forEach(b => b.addEventListener('click', () => switchView(b.dataset.view)));
   $('#parseBtn').addEventListener('click', function () {
     const t = $('#rawText').value.trim();
     if (!t) { toast('请先粘贴简历内容，或上传文件，也可以点击下方的示例简历快速体验', '还没有内容'); return; }
