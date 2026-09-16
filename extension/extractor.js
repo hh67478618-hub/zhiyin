@@ -2758,9 +2758,28 @@ function autoAddSections(opts) {
   return new Promise(function (resolve) {
     var added = { work: 0, proj: 0, edu: 0 }, undetected = [];
     var queue = [];
+    /* 第四十五轮：防重复加段的守卫。真实站点的「添加」按钮多半点了就生效，但新块的
+       栏目词不一定在扫描口径里 —— 扫描数出来还是 0，下一次点击又会去点一次，
+       用户实测「每点一次多一段空白教育」。守卫记在页面 sessionStorage：
+       某组点过但扫描没确认过 → 本页会话内不再点，如实报告让用户核对；
+       一旦扫描能看见该组的块（have>0），守卫自动失效，按实际差额重新排队。 */
+    function guardRead() {
+      try { return JSON.parse(window.sessionStorage.getItem('zhiyin_autoadd_guard') || '{}') || {}; }
+      catch (e) { return {}; }
+    }
+    function guardBump(sect) {
+      try {
+        var g = guardRead();
+        g[sect] = (g[sect] || 0) + 1;
+        window.sessionStorage.setItem('zhiyin_autoadd_guard', JSON.stringify(g));
+      } catch (e) { /* sessionStorage 不可用（隐私模式等）就没有守卫，行为同旧版 */ }
+    }
+    var guard = guardRead();
     Object.keys(need).forEach(function (sect) {
-      var have = countBlocks(sect), wantN = need[sect];
-      for (var k = have; k < wantN; k++) queue.push(sect);
+      var have = countBlocks(sect);
+      var already = have > 0 ? 0 : (guard[sect] || 0);
+      var eff = need[sect] - have - already;
+      for (var k = 0; k < eff; k++) queue.push(sect);
     });
     if (!queue.length) return resolve({ ok: true, added: added, undetected: undetected });
     function finish() {
@@ -2797,6 +2816,7 @@ function autoAddSections(opts) {
               var after = countBlocks(sect);
               if (after <= before) {
                 undetected.push(sect);
+                guardBump(sect);   /* 本页会话内：这组没被扫描确认过，别再点了 */
                 queue = queue.filter(function (s) { return s !== sect; });
               }
               return step();

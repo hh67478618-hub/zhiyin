@@ -1281,6 +1281,34 @@ function runNowcoderReproSuite() {
                       JSON.stringify({ clicks: clicks, r: rJ }));
                     winJ.window.close();
                   });
+                }).then(function () {
+                  /* 场景 K（第四十五轮）：陌生结构防堆积 —— 站点的「添加教育经历」真的会加段，
+                     但新块的栏目词扩展认不出（countBlocks 恒 0）。旧版每次点击都会再点一次
+                     添加按钮（用户实测：每点一次多一段空白教育）。新版守卫记进 sessionStorage：
+                     点过但扫描没确认过 → 本页会话内不再点，如实报 undetected。 */
+                  const winK = new JSDOM('<!DOCTYPE html><html><head><title>申请表</title></head><body>' +
+                    '<button id="addEdu2" type="button">添加教育经历</button><div id="root2"></div></body></html>',
+                    { url: 'https://careers.example.com/apply4', runScripts: 'outside-only' });
+                  winK.window.eval(src);
+                  let clicksK = 0;
+                  winK.window.document.getElementById('addEdu2').addEventListener('click', function () {
+                    clicksK++;
+                    const d = winK.window.document.createElement('div');
+                    d.innerHTML = '<label>就读信息<input></label>';   /* 「就读信息」不在栏目词口径里 → 扫描认不出 */
+                    winK.window.document.getElementById('root2').appendChild(d);
+                  });
+                  const SECS_K = { education: [{ school: '甲大学' }] };
+                  return winK.window.autoAddSections({ sections: SECS_K }).then(function (rK1) {
+                    ok('陌生结构防堆积：第一次运行点 1 次按钮、如实报 undetected',
+                      clicksK === 1 && (rK1.undetected || []).indexOf('edu') >= 0,
+                      JSON.stringify({ clicks: clicksK, r: rK1 }));
+                    return winK.window.autoAddSections({ sections: SECS_K }).then(function (rK2) {
+                      ok('陌生结构防堆积：第二次运行不再点按钮（守卫生效，空白段不再堆积）',
+                        clicksK === 1,
+                        JSON.stringify({ clicks: clicksK, r: rK2 }));
+                      winK.window.close();
+                    });
+                  });
                 });
               });
             });

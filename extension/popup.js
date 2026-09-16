@@ -280,18 +280,14 @@ async function fillCurrentPage() {
     adapt = aj;
   }
   const args = [{ fields: payload.fields, sections: payload.sections || null, adapt: adapt }];
-  await injectBundle(tab.id);
-  const injected = await chrome.scripting.executeScript({
-    target: { tabId: tab.id },
-    func: fillFromPayload,
-    /* sections 也传进去：分段卡片上的「公司名称 / 项目名称」这类字段靠它补第一段 */
-    args: args
-  });
-  const r = injected && injected[0] ? injected[0].result : null;
 
-  /* 第 2.5 遍（第四十三轮）：页面上经历段块不够时，自动点「添加经历」按钮补齐。
-     用户实测：第一次在全新申请表页只有姓名邮箱被填上，得手动添加每段经历再粘一遍。
-     现在由扩展代劳：按载荷需要的段数补块（找不到按钮就跳过，不硬来）。 */
+  /* 第 2.5 遍（第四十三轮引入，第四十五轮前移到第一遍之前）：页面上经历段块不够时，
+     自动点「添加经历」按钮补齐。
+     **为什么必须在第一遍之前**：旧顺序（先填普通栏 → 再补块 → 再填下拉/日期）在
+     全新申请表上，第一遍跑完时块还不存在、名称栏全空，第二遍配对没有锚点，日期
+     整段落空 —— 用户只能再点一次（第二次块已在，第一遍把名称写进去，第二遍才配
+     上）。前移后：补块 → 第一遍把「公司名 / 学校名」写进新块 → 第二遍有锚点，
+     一次点击全链路走完。 */
   let addedInfo = null;
   try {
     await injectBundle(tab.id);
@@ -302,6 +298,15 @@ async function fillCurrentPage() {
     });
     addedInfo = injA && injA[0] ? injA[0].result : null;
   } catch (e) { addedInfo = null; }
+
+  await injectBundle(tab.id);
+  const injected = await chrome.scripting.executeScript({
+    target: { tabId: tab.id },
+    func: fillFromPayload,
+    /* sections 也传进去：分段卡片上的「公司名称 / 项目名称」这类字段靠它补第一段 */
+    args: args
+  });
+  const r = injected && injected[0] ? injected[0].result : null;
 
   /* 第二遍：检索型下拉 + 日期选择器（异步）。
      公司名称 / 学校名称 / 起止时间这类栏是受控的搜索组件，写 value 无效，
@@ -324,6 +329,7 @@ async function fillCurrentPage() {
     const done = comboFilled.map(function (f) { return f.field; });
     r.missed = (r.missed || []).filter(function (k) { return done.indexOf(k) < 0; });
   }
+  r.autoAdd = addedInfo;   /* 第四十五轮：补段结果上屏（此前算完就丢） */
   return r;
 }
 
@@ -555,12 +561,25 @@ function bindFill() {
         ? '<br><b>我没动这几类栏（也不该动）</b>：' +
           esc(r.skipped.map(function (s) { return (s.label || s.field) + '（' + s.reason + '）'; }).join('；'))
         : '';
+      /* 第四十五轮：自动补段结果上屏 —— 补了什么、哪些组「点了但扩展认不出结构」
+         都明说，用户才知道去页面核对而不是反复点「填充」。 */
+      const aa = r.autoAdd || null;
+      const aaBits = aa && aa.added ? Object.keys(aa.added).filter(function (k) { return aa.added[k] > 0; }) : [];
+      const SECT_CN = { work: '工作', proj: '项目', edu: '教育' };
+      const autoAddLine = (aa && (aaBits.length || (aa.undetected && aa.undetected.length)))
+        ? '<br><b>自动补段</b>：' +
+          (aaBits.length ? aaBits.map(function (k) { return (SECT_CN[k] || k) + '经历 + ' + aa.added[k] + ' 段'; }).join('、') : '本页的添加按钮点不出扩展认得出的新块') +
+          (aa.undetected && aa.undetected.length
+            ? (aaBits.length ? '；' : '') + '<b>「' + aa.undetected.map(function (k) { return (SECT_CN[k] || k) + '经历'; }).join('、') +
+              '」新加的段扩展认不出结构</b> —— 请到页面上核对；这一组本次不会重复添加（防止堆出空白段），如需精确适配请用「探测表单结构」'
+            : '')
+        : '';
       const notices = (r.notice || []).concat((r.combo && r.combo.notice) || []);
       const noticeLine = notices.length
         ? '<br>' + esc(notices.join('；'))
         : '';
       b.className = 'banner';
-      b.innerHTML = '已填 <b>' + gotSet.length + '</b> 个字段：' + esc(got) + '。' + miss + comboLine + noticeLine + skippedLine +
+      b.innerHTML = '已填 <b>' + gotSet.length + '</b> 个字段：' + esc(got) + '。' + miss + comboLine + autoAddLine + noticeLine + skippedLine +
         (r.custom && r.custom.used ? '<br><b>本岗改写文案已填入「' + esc(r.custom.where || '描述') + '」栏</b>（' + r.custom.bullets + ' 条，' +
           '其中的 [N] 是提醒你补真实数字的占位符，提交前记得改掉）—— 只有这一栏用定制版，其余描述栏用简历原文。' : '') +
         (lastFillSections ? '<br><b>教育 / 工作 / 项目</b>这类分段内容不在这一层的输入框里时——下方已列出，' +
